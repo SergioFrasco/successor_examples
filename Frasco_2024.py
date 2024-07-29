@@ -55,6 +55,28 @@ class TabularSuccessorAgent(object):
         self.M[s_a, s, :] += self.learning_rate * td_error
         return td_error
 
+# visualizes how frequently different states (or grid cells) have been visited during an episode or across multiple experiences.
+def print_occupancy(experiences, grid_size):
+    occupancy_grid = np.zeros([grid_size, grid_size])
+    for experience in experiences:
+        occupancy_grid += env.state_to_grid(experience[0])
+    occupancy_grid = np.sqrt(occupancy_grid)
+    occupancy_grid = utils.mask_grid(occupancy_grid, env.blocks)
+    plt.imshow(occupancy_grid)
+    plt.show()
+
+
+# we can examine the successor representation for each state/action pair. This shows us the way in which the successor map for each action is slightly biased in the direction of that action.
+def plot_srs(action, M):
+    M = np.reshape(M, [env.action_size, env.state_size, grid_size, grid_size])
+    M = np.sqrt(M)
+    plt.figure(1, figsize=(grid_size*3, grid_size*3))
+    for i in range(grid_size*grid_size):
+        if env.state_to_point(i) not in env.blocks:
+            ax = plt.subplot(grid_size, grid_size, i + 1)
+            ax.imshow(utils.mask_grid(M[action,i,:,:], env.blocks))
+    plt.show()
+
 # Iitialize and plot the gird world
 cmap = plt.cm.viridis
 cmap.set_bad(color='white')
@@ -66,7 +88,7 @@ env.reset(agent_pos=[0,0], goal_pos=[0, grid_size-1])
 plt.imshow(env.grid)
 plt.show() 
 
-# Training the agent with a moving reward
+# Training and testing the agent with a moving reward
 train_episode_length = 50
 test_episode_length = 50
 episodes = 2000
@@ -138,3 +160,60 @@ ax = fig.add_subplot(2, 2, 2)
 ax.plot(test_lengths)
 ax.set_title("Episode Lengths")
 plt.show()
+
+# Show the cells which the agent occupied
+print_occupancy(experiences, grid_size)
+
+# Visualize the raw successor matrix
+averaged_M = np.mean(agent.M, axis=0)
+plt.imshow(averaged_M)
+plt.show()
+
+
+# instead plot the successor for each state onto the environment itself
+averaged_M = np.reshape(averaged_M, [env.state_size, grid_size, grid_size])
+
+cmap = plt.cm.viridis
+cmap.set_bad(color='white')
+
+plt.figure(1, figsize=(grid_size*3, grid_size*3))
+for i in range(env.state_size):
+    if env.state_to_point(i) not in env.blocks:
+        ax = plt.subplot(grid_size, grid_size, i + 1)
+        ax.imshow(utils.mask_grid(averaged_M[i,:,:], env.blocks), cmap=cmap)
+plt.show()
+
+# Scatter plot showing bottleneck states
+M_s = np.mean(agent.M[:,:,:], axis=0)
+colors = np.zeros([env.state_size])
+for bottleneck in env.bottlenecks:
+    grid = np.zeros([env.grid_size,env.grid_size])
+    grid[bottleneck[0],bottleneck[1]] = 1
+    grid = grid.flatten()
+    b_state = np.where(grid==1)[0][0]
+    colors[b_state] = 1
+pca = PCA(n_components=2)
+pca_result = pca.fit_transform(M_s[:])
+
+plt.scatter(pca_result[:,0], pca_result[:,1], c=colors)
+plt.show()
+
+# Plotting the q-values (which flow from the reward)
+a = np.zeros([env.state_size])
+for i in range(env.state_size):
+    Qs = agent.Q_estimates(i)
+    V = np.mean(Qs)
+    a[i] = V
+V_Map = np.reshape(a, [grid_size, grid_size])
+V_Map = np.sqrt(V_Map)
+
+V_Map = utils.mask_grid(V_Map, env.blocks)
+
+plt.imshow(V_Map)
+plt.show()
+
+
+# Plot the successors for each state,action pair. here im only doing "up"
+plot_srs(0, agent.M)
+
+
