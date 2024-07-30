@@ -168,27 +168,21 @@ class SimpleGrid(object):
             return self.state_to_grid(state)
         if self.obs_mode == "index":
             return state
-            
+
+    # This has been changed to allow for negative rewards to discourage runtime and incorrect moves
     def step(self, action):
-        # 0 - Up
-        # 1 - Down
-        # 2 - Left
-        # 3 - Right
-        move_array = np.array([0,0])
-        if action == 2:
-            move_array = np.array([0,-1])
-        if action == 3:
-            move_array = np.array([0,1])
-        if action == 0:
-            move_array = np.array([-1,0])
-        if action == 1:
-            move_array = np.array([1,0])
-        self.move_agent(move_array)
+        # 0 - Up, 1 - Down, 2 - Left, 3 - Right
+        move_array = np.array([[0,-1], [0,1], [-1,0], [1,0]][action])
+        self.agent_pos = [max(0, min(self.grid_size-1, self.agent_pos[i] + move_array[i])) for i in range(2)]
+        
         if self.agent_pos == self.goal_pos:
             self.done = True
-            return 1.0
+            return 10.0
+        elif list(self.agent_pos) in self.blocks:
+            self.agent_pos = [max(0, min(self.grid_size-1, self.agent_pos[i] - move_array[i])) for i in range(2)]
+            return -0.1  # Small penalty for hitting a wall
         else:
-            return 0.0
+            return -0.01  # Small step cost
 
     def state_to_goal(self, state):
         return self.state_to_obs(state)
