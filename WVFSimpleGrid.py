@@ -7,9 +7,9 @@ grid_size = 11
 env = SimpleGrid(grid_size, block_pattern="four_rooms", obs_mode="index")
 
 # WVF learning parameters
-gamma = 1
-maxiter = 5000
-alpha = 1
+gamma = 0.99
+maxiter = 10000
+alpha = 0.1
 epsilon = 0.1
 
 def Goal_Oriented_Q_learning(env, epsilon, alpha, maxiter):
