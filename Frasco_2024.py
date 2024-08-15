@@ -11,7 +11,12 @@ grid_size = 7
 pattern="four_rooms"
 env = SimpleGrid(grid_size, block_pattern=pattern, obs_mode="index")
 env.reset(agent_pos=[0,0], goal_pos=[0, grid_size-1])
-plt.show()
+
+# Plot the arena
+print("Four Rooms Arena: ")
+plt.show() 
+
+
 class TabularSuccessorAgent(object):
     def __init__(self, state_size, action_size, learning_rate, gamma):
         self.state_size = state_size
@@ -69,10 +74,11 @@ class TabularSuccessorAgent(object):
             wvf[:, goal] = np.max(np.matmul(self.M, goal_reward), axis=0)
         return wvf
 
+# --------------------Training and Testing --------------------------------
 # paramaters for training
 train_episode_length = 50
 test_episode_length = 50
-episodes = 10000
+episodes = 100000
 gamma = 0.95
 lr = 5e-2
 train_epsilon = 1.0
@@ -108,6 +114,7 @@ for i in range(episodes):
         reward = env.step(action) # obtain reward from performing the action
         next_state = env.observation # obtain the next state
         done = env.done # check if we're at goal state
+        experiences.append([state, action, next_state, reward]) # Collect the experiences
         experience = [state, action, next_state, reward, done]
         
         td_sr = agent.update_sr(experience)
@@ -134,7 +141,7 @@ for i in range(episodes):
     test_lengths.append(j)
     
     if i % 50 == 0:
-        print('\rEpisode {}/{}, TD Error: {}, Test Lengths: {}'
+        print('\rEpisode {}/{}, TD Error: {}, Test Lengths: {}\n'
               .format(i, episodes, np.mean(lifetime_td_errors[-50:]), 
                       np.mean(test_lengths[-50:])), end='')
 
@@ -177,65 +184,72 @@ def plot_srs(action, M, env):
 
 
 
-# After training
+# ---------After training---------
+# This shows the agent spends a lot of time in the top left perhaps because this is where they are initialized each run
+print("Training Occupancy Plot\n")
 print_occupancy(experiences, grid_size)
+
+print("Test Occupancy Plot\n")
 print_occupancy(test_experiences, grid_size)
 
 # plotting the raw SR matrix
 averaged_M = np.mean(agent.M, axis=0)
-plt.imshow(averaged_M)
 
+print("plt.imshow\n")
+plt.imshow(averaged_M)
+print("plot_srs\n")
 plot_srs(1, agent.M, env)
+print("plot_wvf\n")
 plot_wvf(agent, env)
 
 
-fig = plt.figure(figsize=(10, 6))
+# fig = plt.figure(figsize=(10, 6))
 
-ax = fig.add_subplot(2, 2, 1)
-ax.plot(lifetime_td_errors)
-ax.set_title("TD Error")
-ax = fig.add_subplot(2, 2, 2)
-ax.plot(test_lengths)
-ax.set_title("Episode Lengths")
+# ax = fig.add_subplot(2, 2, 1)
+# ax.plot(lifetime_td_errors)
+# ax.set_title("TD Error")
+# ax = fig.add_subplot(2, 2, 2)
+# ax.plot(test_lengths)
+# ax.set_title("Episode Lengths")
 
 
 
-averaged_M = np.mean(agent.M, axis=0)
-plt.show()
+# averaged_M = np.mean(agent.M, axis=0)
+# plt.show()
 
-averaged_M = np.reshape(averaged_M, [env.state_size, grid_size, grid_size])
+# averaged_M = np.reshape(averaged_M, [env.state_size, grid_size, grid_size])
 
-cmap = plt.cm.viridis
-cmap.set_bad(color='white')
+# cmap = plt.cm.viridis
+# cmap.set_bad(color='white')
 
-plt.figure(1, figsize=(grid_size*3, grid_size*3))
-for i in range(env.state_size):
-    if env.state_to_point(i) not in env.blocks:
-        ax = plt.subplot(grid_size, grid_size, i + 1)
-        ax.imshow(utils.mask_grid(averaged_M[i,:,:], env.blocks), cmap=cmap)
+# plt.figure(1, figsize=(grid_size*3, grid_size*3))
+# for i in range(env.state_size):
+#     if env.state_to_point(i) not in env.blocks:
+#         ax = plt.subplot(grid_size, grid_size, i + 1)
+#         ax.imshow(utils.mask_grid(averaged_M[i,:,:], env.blocks), cmap=cmap)
 
-M_s = np.mean(agent.M[:,:,:], axis=0)
-colors = np.zeros([env.state_size])
-for bottleneck in env.bottlenecks:
-    grid = np.zeros([env.grid_size,env.grid_size])
-    grid[bottleneck[0],bottleneck[1]] = 1
-    grid = grid.flatten()
-    b_state = np.where(grid==1)[0][0]
-    colors[b_state] = 1
-pca = PCA(n_components=2)
-pca_result = pca.fit_transform(M_s[:])
+# M_s = np.mean(agent.M[:,:,:], axis=0)
+# colors = np.zeros([env.state_size])
+# for bottleneck in env.bottlenecks:
+#     grid = np.zeros([env.grid_size,env.grid_size])
+#     grid[bottleneck[0],bottleneck[1]] = 1
+#     grid = grid.flatten()
+#     b_state = np.where(grid==1)[0][0]
+#     colors[b_state] = 1
+# pca = PCA(n_components=2)
+# pca_result = pca.fit_transform(M_s[:])
 
-plt.scatter(pca_result[:,0], pca_result[:,1], c=colors)
+# plt.scatter(pca_result[:,0], pca_result[:,1], c=colors)
 
-a = np.zeros([env.state_size])
-for i in range(env.state_size):
-    Qs = agent.Q_estimates(i)
-    V = np.mean(Qs)
-    a[i] = V
-V_Map = np.reshape(a, [grid_size, grid_size])
-V_Map = np.sqrt(V_Map)
+# a = np.zeros([env.state_size])
+# for i in range(env.state_size):
+#     Qs = agent.Q_estimates(i)
+#     V = np.mean(Qs)
+#     a[i] = V
+# V_Map = np.reshape(a, [grid_size, grid_size])
+# V_Map = np.sqrt(V_Map)
 
-V_Map = utils.mask_grid(V_Map, env.blocks)
+# V_Map = utils.mask_grid(V_Map, env.blocks)
 
-plt.show()
+# plt.show()
 
