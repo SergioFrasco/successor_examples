@@ -47,8 +47,11 @@ class TabularSuccessorAgent(object):
 
     # ----------------------------------------------------------------
     # TODO make sure goals arent generated in interior walls. This means max goals is equal to 40
+    # Not sure why passing in a goal size doesnt work
     # ----------------------------------------------------------------
-    def generate_goal_matrices(self, state_size, goal_size=49):
+    def generate_goal_matrices(self, state_size, goal_size):
+        goal_size = 49 #temporary because it doesnt work any other way
+        
         if goal_size > state_size:
             print("Goal size cannot be larger than state size!")
             return
@@ -116,7 +119,7 @@ gamma = 0.95
 lr = 5e-2
 train_epsilon = 0.5
 test_epsilon = 0.1
-goal_size = 49 # Testing with a goal from every state
+goal_size = 1 # Testing with a goal from every state
 
 # Initialize the agent and environment
 agent = TabularSuccessorAgent(env.state_size, env.action_size, lr, gamma, goal_size)
