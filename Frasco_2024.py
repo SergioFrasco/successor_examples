@@ -16,9 +16,8 @@ env.reset(agent_pos=[0,0], goal_pos=[0, grid_size-1])
 print("Four Rooms Arena: ")
 plt.show() 
 
-
 class TabularSuccessorAgent(object):
-    def __init__(self, state_size, action_size, learning_rate, gamma):
+    def __init__(self, state_size, action_size, learning_rate, gamma, goal_size):
         self.state_size = state_size
         self.action_size = action_size
         self.M = np.zeros((action_size, state_size, state_size))
@@ -42,6 +41,39 @@ class TabularSuccessorAgent(object):
             Qs = self.Q_estimates(state, goal)
             return np.argmax(Qs)
     
+    # generate number of goals, if no goal size specified, goal_size = state_size
+    def generate_goal_matrices(self, state_size, goal_size = 49):
+
+        if goal_size > state_size:
+            print("Goal size cannot be larger than state size!")
+            return
+        
+        if goal_size != 1:
+            print("Goal size must be 1 for this implementation!")
+            return
+        
+        if state_size ** 2 < state_size:
+            print("Not enough positions to place goals uniquely in each slice!")
+            return
+        
+        # Initialize the goals matrix to zeros
+        self.goals = np.zeros((state_size, state_size, state_size), dtype=int)
+        
+        # Generate a list of all possible positions
+        all_positions = [(x, y) for x in range(state_size) for y in range(state_size)]
+        
+        # Shuffle positions to randomize the goal placements
+        np.random.shuffle(all_positions)
+        
+        # Place one goal in each slice at a unique position
+
+        for slice_index in range(state_size):
+            if slice_index  <= goal_size:
+                x, y = all_positions[slice_index]
+                self.goals[slice_index, x, y] = 1
+            else:
+                break
+
     # Updates the reward prediction weights based on the rewards observed
     def update_w(self, current_exp):
         s_1 = current_exp[2]
@@ -65,8 +97,9 @@ class TabularSuccessorAgent(object):
         self.M[s_a, s, :] += self.learning_rate * td_error
         return td_error
 
+    
     def compute_wvf(self):
-        wvf = np.zeros((self.state_size, self.state_size))
+        wvf = np.zeros((self.state_size, self.state_size)) 
         for goal in range(self.state_size):
             goal_reward = utils.onehot(goal, self.state_size)
 
@@ -78,14 +111,15 @@ class TabularSuccessorAgent(object):
 # paramaters for training
 train_episode_length = 50
 test_episode_length = 50
-episodes = 100000
+episodes = 10000
 gamma = 0.95
 lr = 5e-2
-train_epsilon = 1.0
+train_epsilon = 0.5
 test_epsilon = 0.1
+goal_size = 49 # Testing with a goal from every state
 
 # Initialize the agent and environment
-agent = TabularSuccessorAgent(env.state_size, env.action_size, lr, gamma)
+agent = TabularSuccessorAgent(env.state_size, env.action_size, lr, gamma, goal_size)
 
 experiences = []
 test_experiences = []
@@ -93,6 +127,7 @@ test_lengths = []
 lifetime_td_errors = []
 
 for i in range(episodes):
+
 
     # training phase
     agent_start = [0,0] #set the agent to the top left
@@ -182,7 +217,35 @@ def plot_srs(action, M, env):
     plt.tight_layout()
     plt.show()
 
+# plotting the raw SR matrix
+def plot_raw_sr(sr, env):
+    averaged_M = np.mean(sr, axis=0)
 
+    # Create a mapping from state index to grid coordinates
+    state_to_coord = {i: env.state_to_point(i) for i in range(env.state_size)}
+
+    # Create wall mask
+    wall_mask = np.zeros_like(averaged_M, dtype=bool)
+    for state, coord in state_to_coord.items():
+        if coord in env.blocks:
+            wall_mask[state, :] = True
+            wall_mask[:, state] = True
+    
+    masked_M = np.ma.array(averaged_M, mask=wall_mask)
+    
+    plt.figure(figsize=(10, 10))
+    im = plt.imshow(masked_M, cmap='viridis')
+    plt.colorbar(im, label='SR Value')
+    plt.title('Raw SR Matrix (Non-Wall States)')
+    plt.xlabel('State Index')
+    plt.ylabel('State Index')
+    
+    # Add grid lines to separate rooms
+    for i in range(1, env.grid_size):
+        plt.axhline(y=i * env.grid_size - 0.5, color='k', linestyle='-', linewidth=0.5)
+        plt.axvline(x=i * env.grid_size - 0.5, color='k', linestyle='-', linewidth=0.5)
+    
+    plt.show()
 
 # ---------After training---------
 # This shows the agent spends a lot of time in the top left perhaps because this is where they are initialized each run
@@ -192,11 +255,10 @@ print_occupancy(experiences, grid_size)
 print("Test Occupancy Plot\n")
 print_occupancy(test_experiences, grid_size)
 
-# plotting the raw SR matrix
-averaged_M = np.mean(agent.M, axis=0)
 
-print("plt.imshow\n")
-plt.imshow(averaged_M)
+# Call the function
+print("Raw SR Matrix")
+plot_raw_sr(agent.M, env)
 print("plot_srs\n")
 plot_srs(1, agent.M, env)
 print("plot_wvf\n")
