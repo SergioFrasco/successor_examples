@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import utils
 from sklearn.decomposition import PCA
 from gridworld import SimpleGrid
+from tqdm import tqdm
 
 cmap = plt.cm.viridis
 cmap.set_bad(color='white')
@@ -16,6 +17,92 @@ env.reset(agent_pos=[0, 0], goal_pos=[0, grid_size - 1])
 print("Four Rooms Arena: ")
 plt.show()
 
+# ------------plotting functions-----------
+
+# display the WVF learned
+def plot_wvf(agent, env):
+    wvf = agent.compute_wvf()
+    plt.figure(figsize=(10, 10))
+    for goal in range(env.state_size):
+        if env.state_to_point(goal) not in env.blocks:
+            ax = plt.subplot(env.grid_size, env.grid_size, goal + 1)
+            value_map = np.reshape(wvf[:, goal], (env.grid_size, env.grid_size))
+            ax.imshow(utils.mask_grid(value_map, env.blocks), cmap='viridis')
+            ax.set_title(f'Goal: {goal}')
+    plt.tight_layout()
+    plt.show()
+
+# Plotting the reward matrix slices for easy viewing
+def plot_goal_matrices(goals, env):
+    state_size = goals.shape[0]
+    grid_size = 7  # Since we know it's a 7x7 grid
+
+    plt.figure(figsize=(20, 20))
+    
+    for slice_index in range(state_size):
+        ax = plt.subplot(grid_size, grid_size, slice_index + 1)
+        goal_matrix = goals[slice_index]
+        ax.imshow(utils.mask_grid(goal_matrix, env.blocks), cmap='viridis')
+        ax.set_title(f'Slice: {slice_index}')
+        ax.axis('on')
+
+    plt.tight_layout()
+    plt.show()
+
+
+# Use the experiences to show where the agent was the most
+def print_occupancy(experiences, env):
+    occupancy_grid = np.zeros([env.grid_size, env.grid_size])
+    for experience in experiences:
+        occupancy_grid += env.state_to_grid(experience[0])
+    occupancy_grid = np.sqrt(occupancy_grid)
+    occupancy_grid = utils.mask_grid(occupancy_grid, env.blocks)
+    plt.imshow(occupancy_grid, cmap='viridis')
+    plt.colorbar()
+    plt.show()
+
+def plot_srs(action, M, env):
+    M = np.reshape(M, [env.action_size, env.state_size, env.grid_size, env.grid_size])
+    M = np.sqrt(M)
+    plt.figure(figsize=(env.grid_size*3, env.grid_size*3))
+    for i in range(env.state_size):
+        if env.state_to_point(i) not in env.blocks:
+            ax = plt.subplot(env.grid_size, env.grid_size, i + 1)
+            ax.imshow(utils.mask_grid(M[action, i, :, :], env.blocks), cmap='viridis')
+    plt.tight_layout()
+    plt.show()
+
+# plotting the raw SR matrix
+def plot_raw_sr(sr, env, experiment_name):
+    averaged_M = np.mean(sr, axis=0)
+
+    # Create a mapping from state index to grid coordinates
+    state_to_coord = {i: env.state_to_point(i) for i in range(env.state_size)}
+
+    # Create wall mask
+    wall_mask = np.zeros_like(averaged_M, dtype=bool)
+    for state, coord in state_to_coord.items():
+        if coord in env.blocks:
+            wall_mask[state, :] = True
+            wall_mask[:, state] = True
+    
+    masked_M = np.ma.array(averaged_M, mask=wall_mask)
+    
+    plt.figure(figsize=(10, 10))
+    im = plt.imshow(masked_M, cmap='viridis')
+    plt.colorbar(im, label='SR Value')
+    plt.title(experiment_name)
+    plt.xlabel('State Index')
+    plt.ylabel('State Index')
+    
+    # Add grid lines to separate rooms
+    for i in range(1, env.grid_size):
+        plt.axhline(y=i * env.grid_size - 0.5, color='k', linestyle='-', linewidth=0.5)
+        plt.axvline(x=i * env.grid_size - 0.5, color='k', linestyle='-', linewidth=0.5)
+    
+    plt.show()
+
+# Class for the successorAgent
 class TabularSuccessorAgent(object):
     def __init__(self, state_size, action_size, learning_rate, gamma, goal_size):
         self.state_size = state_size
@@ -25,7 +112,7 @@ class TabularSuccessorAgent(object):
         self.learning_rate = learning_rate
         self.gamma = gamma
         self.goal_size = goal_size
-        self.goals = np.zeros((state_size, state_size, state_size), dtype=int)
+        self.goals = np.zeros((state_size, 7, 7), dtype=int)
     
     # Computes action values by combining the SR with the current reward prediction (w) or a specified goal
     def Q_estimates(self, state, goal=None):
@@ -50,32 +137,19 @@ class TabularSuccessorAgent(object):
     # Not sure why passing in a goal size doesnt work
     # ----------------------------------------------------------------
     def generate_goal_matrices(self, state_size, goal_size):
-        goal_size = 49 #temporary because it doesnt work any other way
+        goal_size = 40  # or whatever value you want to use
+        self.goals = np.zeros((state_size, 7, 7), dtype=int)
         
-        if goal_size > state_size:
-            print("Goal size cannot be larger than state size!")
-            return
-        
-        
-        # # Initialize the goals matrix to zeros
-        # self.goals = np.zeros((state_size, state_size, state_size), dtype=int)
-        
-        # Generate a list of all possible positions
-        all_positions = [(x, y) for x in range(7) for y in range(7)]
-        
-        # Shuffle positions to randomize the goal placements
-        # np.random.shuffle(all_positions)
-        
-        # Place one goal in each slice at a unique position
-        for slice_index in range(state_size):
-                
-            if slice_index <= goal_size:
-                x, y = all_positions[slice_index]
+        available_positions = [(x, y) for x in range(7) for y in range(7) if [x, y] not in env.blocks]
+        for slice_index in range(min(state_size, goal_size)):
+            if slice_index < len(available_positions):
+                x, y = available_positions[slice_index]
                 self.goals[slice_index, x, y] = 1
                 print(f"Slice {slice_index}: Position ({x}, {y}) set as goal")
-
             else:
                 break
+        
+        return self.goals
 
     # Updates the reward prediction weights based on the rewards observed
     def update_w(self, current_exp):
@@ -110,60 +184,203 @@ class TabularSuccessorAgent(object):
             wvf[:, goal] = np.max(np.matmul(self.M, goal_reward), axis=0)
         return wvf
 
+# --------------------Supporting Functions---------
+
+# assists with finding positions for random agent initialization.
+def random_valid_position(env):
+    while True:
+        x = np.random.randint(0, env.grid_size)
+        y = np.random.randint(0, env.grid_size)
+        if [x, y] not in env.blocks:
+            return [x, y]
+
+# assists with choosing a random goal slice for the agent to learn off of
+def get_goal_sequence(total_episodes, goal_size):
+    episodes_per_goal = total_episodes // goal_size
+    remaining_episodes = total_episodes % goal_size
+    
+    goal_sequence = []
+    available_goals = list(range(goal_size))
+    
+    for _ in range(goal_size):
+        if not available_goals:
+            break
+        goal = np.random.choice(available_goals)
+        available_goals.remove(goal)
+        goal_sequence.extend([goal] * episodes_per_goal)
+    
+    # Distribute remaining episodes
+    for i in range(remaining_episodes):
+        goal_sequence.append(np.random.choice(range(goal_size)))
+    
+    return goal_sequence
+
 # --------------------Training and Testing --------------------------------
 # parameters for training
 train_episode_length = 50
 test_episode_length = 50
-episodes = 1000
+episodes = 100000
 gamma = 0.95
 lr = 5e-2
-train_epsilon = 0.5
-test_epsilon = 0.1
+
+initial_train_epsilon = 0.5
+epsilon_decay = 0.995
+
+test_epsilon = 0.01
 goal_size = 1 # Testing with a goal from every state
 
 # Initialize the agent and environment
 agent = TabularSuccessorAgent(env.state_size, env.action_size, lr, gamma, goal_size)
+
+# Generate goal matrices
+all_goals = agent.generate_goal_matrices(agent.state_size, agent.state_size)
+
+# Filter out slices without goals
+goals_with_targets = [slice_index for slice_index in range(all_goals.shape[0]) if np.any(all_goals[slice_index])]
+
+print(f"Number of slices with goals: {len(goals_with_targets)}")
+
+# Calculate episodes per goal
+episodes_per_goal = episodes // len(goals_with_targets)
+remaining_episodes = episodes % len(goals_with_targets)
 
 experiences = []
 test_experiences = []
 test_lengths = []
 lifetime_td_errors = []
 
-for i in range(episodes):
-    # training phase
-    agent_start = [0, 0] # set the agent to the top left
+# Shuffle goal order
+goal_order = np.random.permutation(goal_size)
+# Shuffle the order of goals with targets
+np.random.shuffle(goals_with_targets)
 
-    # switch goals half way through episodes
-    if i < episodes // 2:
-        goal_pos = [0, grid_size - 1]
-    else:
-        if i == episodes // 2:
-            print("\nSwitched reward locations")
-        goal_pos = [grid_size - 1, grid_size - 1]
+# --------------------Random Policy Training Loop --------------------
+# This loop trains the agent using a random policy (epsilon = 1)
 
-    env.reset(agent_pos=agent_start, goal_pos=goal_pos)
-    state = env.observation
-    episodic_error = [] # keeps track of error
+random_policy_experiences = []
+random_policy_test_experiences = []
+random_policy_test_lengths = []
+random_policy_td_errors = []
 
-    for j in range(train_episode_length):
-        action = agent.sample_action(state, epsilon=train_epsilon) # get an action from epsilon greedy
-        reward = env.step(action) # obtain reward from performing the action
-        next_state = env.observation # obtain the next state
-        done = env.done # check if we're at goal state
-        experiences.append([state, action, next_state, reward]) # Collect the experiences
-        experience = [state, action, next_state, reward, done]
-        
-        td_sr = agent.update_sr(experience)
-        td_w = agent.update_w(experience)
-        episodic_error.append(np.mean(np.abs(td_sr)))
-        
-        state = next_state
-        if done:
-            break
+# Training loop for random policy
+for goal_index in goals_with_targets:
+    goal_episodes = episodes_per_goal + (1 if remaining_episodes > 0 else 0)
+    remaining_episodes = max(0, remaining_episodes - 1)
     
-    lifetime_td_errors.append(np.mean(episodic_error))
+    print(f"\nTraining on goal slice {goal_index} with random policy for {goal_episodes} episodes")
     
+    epsilon = 1  # Set epsilon to 1 for random policy
+    
+    for episode in tqdm(range(goal_episodes), desc=f"Training goal slice {goal_index} (Random Policy)"):
+        # training phase
+        agent_start = random_valid_position(env)
+        goal_pos = env.state_to_point(np.where(agent.goals[goal_index] == 1)[0][0])
+
+        env.reset(agent_pos=agent_start, goal_pos=goal_pos)
+        state = env.observation
+        episodic_error = []
+
+        for j in range(train_episode_length):
+            action = agent.sample_action(state, epsilon=epsilon)
+            reward = env.step(action)
+            next_state = env.observation
+            done = env.done
+            random_policy_experiences.append([state, action, next_state, reward])
+            experience = [state, action, next_state, reward, done]
+            
+            td_sr = agent.update_sr(experience)
+            td_w = agent.update_w(experience)
+            episodic_error.append(np.mean(np.abs(td_sr)))
+            
+            state = next_state
+            if done:
+                break
+        
+        random_policy_td_errors.append(np.mean(episodic_error))
+        
+        # Test phase
+        agent_start = random_valid_position(env)
+        env.reset(agent_pos=agent_start, goal_pos=goal_pos)
+        state = env.observation
+        for j in range(test_episode_length):
+            action = agent.sample_action(state, epsilon=test_epsilon)
+            reward = env.step(action)
+            state_next = env.observation
+            random_policy_test_experiences.append([state, action, state_next, reward])
+            state = state_next
+            if env.done:
+                break
+        random_policy_test_lengths.append(j)
+
+    # print("\nRandom policy training completed.")
+
+# Check the SR on the random policy:
+
+print("Random Policy: Raw SR Matrix")
+plot_raw_sr(agent.M, env, "Random SR Matrix")
+
+
+# --------------------WVF Policy Training Loop --------------------
+# This loop trains the agent using a decaying epsilon greedy policy and trains it on goal slices in the arena.
+# Training Loop
+for goal_index in goals_with_targets:
+    goal_episodes = episodes_per_goal + (1 if remaining_episodes > 0 else 0)
+    remaining_episodes = max(0, remaining_episodes - 1)
+    
+    print(f"\nTraining on goal slice {goal_index} for {goal_episodes} episodes")
+    
+    # Reset epsilon for new goal
+    epsilon = initial_train_epsilon
+    
+    for episode in tqdm(range(goal_episodes), desc=f"Training goal slice {goal_index}"):
+        # training phase
+        agent_start = random_valid_position(env)
+        goal_pos = env.state_to_point(np.where(agent.goals[goal_index] == 1)[0][0])
+
+        env.reset(agent_pos=agent_start, goal_pos=goal_pos)
+        state = env.observation
+        episodic_error = []
+
+        for j in range(train_episode_length):
+            action = agent.sample_action(state, epsilon=epsilon)
+            reward = env.step(action)
+            next_state = env.observation
+            done = env.done
+            experiences.append([state, action, next_state, reward])
+            experience = [state, action, next_state, reward, done]
+            
+            td_sr = agent.update_sr(experience)
+            td_w = agent.update_w(experience)
+            episodic_error.append(np.mean(np.abs(td_sr)))
+            
+            state = next_state
+            if done:
+                break
+        
+        lifetime_td_errors.append(np.mean(episodic_error))
+
+        # Decay epsilon after each episode
+        epsilon *= epsilon_decay
+        epsilon = max(epsilon, 0.01)  # minimum epsilon value
+        
+        # Test phase
+        agent_start = random_valid_position(env)  
+        env.reset(agent_pos=agent_start, goal_pos=goal_pos)
+        state = env.observation
+        for j in range(test_episode_length):
+            action = agent.sample_action(state, epsilon=test_epsilon)
+            reward = env.step(action)
+            state_next = env.observation
+            test_experiences.append([state, action, state_next, reward])
+            state = state_next
+            if env.done:
+                break
+        test_lengths.append(j)
+        
+    # print("\nTraining completed.")
+
     # Test phase
+    agent_start = random_valid_position(env)  
     env.reset(agent_pos=agent_start, goal_pos=goal_pos)
     state = env.observation
     for j in range(test_episode_length):
@@ -181,119 +398,25 @@ for i in range(episodes):
     #           .format(i, episodes, np.mean(lifetime_td_errors[-50:]), 
     #                   np.mean(test_lengths[-50:])), end='')
 
-# ------------plotting functions-----------
-
-# display the WVF learned
-def plot_wvf(agent, env):
-    wvf = agent.compute_wvf()
-    plt.figure(figsize=(10, 10))
-    for goal in range(env.state_size):
-        if env.state_to_point(goal) not in env.blocks:
-            ax = plt.subplot(env.grid_size, env.grid_size, goal + 1)
-            value_map = np.reshape(wvf[:, goal], (env.grid_size, env.grid_size))
-            ax.imshow(utils.mask_grid(value_map, env.blocks), cmap='viridis')
-            ax.set_title(f'Goal: {goal}')
-    plt.tight_layout()
-    plt.show()
-
-# Plotting the reward matrix slices for easy viewing
-def plot_goal_matrices(goals, env):
-    state_size = goals.shape[0]
-    grid_size = int(np.sqrt(state_size))  # Assuming a square grid for visualization
-
-    plt.figure(figsize=(10, 10))
-    
-    for slice_index in range(state_size):
-        point = env.state_to_point(slice_index)
-        
-        if point not in env.blocks:
-            ax = plt.subplot(grid_size, grid_size, slice_index + 1)
-            goal_matrix = np.zeros((grid_size, grid_size), dtype=int)
-            x, y = point
-            if x < grid_size and y < grid_size:
-                if goals[slice_index, x, y] == 1:
-                    goal_matrix[x, y] = 1
-            # print(f'Slice {slice_index}: Goal Matrix:\n{goal_matrix}')
-            # ax.imshow(goal_matrix, cmap='viridis', vmin=0, vmax=1)
-            ax.imshow(utils.mask_grid(goal_matrix, env.blocks), cmap='viridis')
-            ax.set_title(f'Slice: {slice_index}')
-            ax.axis('on')
-
-    plt.tight_layout()
-    plt.show()
 
 
-# Use the experiences to show where the agent was the most
-def print_occupancy(experiences, env):
-    occupancy_grid = np.zeros([env.grid_size, env.grid_size])
-    for experience in experiences:
-        occupancy_grid += env.state_to_grid(experience[0])
-    occupancy_grid = np.sqrt(occupancy_grid)
-    occupancy_grid = utils.mask_grid(occupancy_grid, env.blocks)
-    plt.imshow(occupancy_grid, cmap='viridis')
-    plt.colorbar()
-    plt.show()
-
-def plot_srs(action, M, env):
-    M = np.reshape(M, [env.action_size, env.state_size, env.grid_size, env.grid_size])
-    M = np.sqrt(M)
-    plt.figure(figsize=(env.grid_size*3, env.grid_size*3))
-    for i in range(env.state_size):
-        if env.state_to_point(i) not in env.blocks:
-            ax = plt.subplot(env.grid_size, env.grid_size, i + 1)
-            ax.imshow(utils.mask_grid(M[action, i, :, :], env.blocks), cmap='viridis')
-    plt.tight_layout()
-    plt.show()
-
-# plotting the raw SR matrix
-def plot_raw_sr(sr, env):
-    averaged_M = np.mean(sr, axis=0)
-
-    # Create a mapping from state index to grid coordinates
-    state_to_coord = {i: env.state_to_point(i) for i in range(env.state_size)}
-
-    # Create wall mask
-    wall_mask = np.zeros_like(averaged_M, dtype=bool)
-    for state, coord in state_to_coord.items():
-        if coord in env.blocks:
-            wall_mask[state, :] = True
-            wall_mask[:, state] = True
-    
-    masked_M = np.ma.array(averaged_M, mask=wall_mask)
-    
-    plt.figure(figsize=(10, 10))
-    im = plt.imshow(masked_M, cmap='viridis')
-    plt.colorbar(im, label='SR Value')
-    plt.title('Raw SR Matrix (Non-Wall States)')
-    plt.xlabel('State Index')
-    plt.ylabel('State Index')
-    
-    # Add grid lines to separate rooms
-    for i in range(1, env.grid_size):
-        plt.axhline(y=i * env.grid_size - 0.5, color='k', linestyle='-', linewidth=0.5)
-        plt.axvline(x=i * env.grid_size - 0.5, color='k', linestyle='-', linewidth=0.5)
-    
-    plt.show()
-
-# ---------After training---------
-# This shows the agent spends a lot of time in the top left perhaps because this is where they are initialized each run
+# # ---------After training---------
 # print("Training Occupancy Plot\n")
 # print_occupancy(experiences, env)
 
 # print("Test Occupancy Plot\n")
 # print_occupancy(test_experiences, env)
 
-agent.generate_goal_matrices(49, goal_size=49)
-plot_goal_matrices(agent.goals, env)
+# print("Goal Slices")
+# plot_goal_matrices(agent.goals, env)
 
+print("WVF: Raw SR Matrix")
+plot_raw_sr(agent.M, env, "WVF e-Greedy SR Matrix")
 
-# Call the function
-# print("Raw SR Matrix")
-# plot_raw_sr(agent.M, env)
 # print("plot_srs\n")
 # plot_srs(1, agent.M, env)
-print("plot_wvf\n")
-plot_wvf(agent, env)
+# print("plot_wvf\n")
+# plot_wvf(agent, env)
 
 
 # fig = plt.figure(figsize=(10, 6))
