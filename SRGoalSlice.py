@@ -5,6 +5,8 @@ from sklearn.decomposition import PCA
 from gridworld import SimpleGrid
 from tqdm import tqdm
 import os
+import matplotlib.animation as animation
+from sklearn.decomposition import PCA #For grid cell plotting
 
 cmap = plt.cm.viridis
 cmap.set_bad(color='white')
@@ -16,9 +18,134 @@ env.reset(agent_pos=[0, 0], goal_pos=[0, grid_size - 1])
 
 # Plot the arena
 print("Four Rooms Arena: ")
-plt.show()
+
+# ------------------ Recording Functions --------------------------------
+def record_agent_trajectories(env, agent, episodes, episode_length, epsilon, filename):
+    fig, ax = plt.subplots(figsize=(7, 7))
+    trajectories = []
+
+    for episode in range(episodes):
+        agent_start = random_valid_position(env)
+        goal_pos = random_valid_position(env)
+        env.reset(agent_pos=agent_start, goal_pos=goal_pos)
+        state = env.observation
+        trajectory = [agent_start]
+
+        for _ in range(episode_length):
+            action = agent.sample_action(state, epsilon=epsilon)
+            reward = env.step(action)
+            next_state = env.observation
+            trajectory.append(env.state_to_point(next_state))
+            state = next_state
+            if env.done:
+                break
+
+        trajectories.append(trajectory)
+
+    def update(frame):
+        ax.clear()
+        ax.set_xlim(0, env.grid_size)
+        ax.set_ylim(0, env.grid_size)
+        ax.set_title(f"Episode {frame + 1}")
+
+        # Draw blocks
+        for block in env.blocks:
+            ax.add_patch(plt.Rectangle((block[1], block[0]), 1, 1, fill=True, color='gray'))
+
+        # Draw trajectory
+        trajectory = trajectories[frame]
+        ax.plot([p[1] + 0.5 for p in trajectory], [p[0] + 0.5 for p in trajectory], 'b-')
+        ax.plot(trajectory[0][1] + 0.5, trajectory[0][0] + 0.5, 'go', markersize=10)  # Start
+        ax.plot(trajectory[-1][1] + 0.5, trajectory[-1][0] + 0.5, 'ro', markersize=10)  # End
+
+        # Draw grid
+        for i in range(env.grid_size + 1):
+            ax.axhline(y=i, color='k', linestyle=':')
+            ax.axvline(x=i, color='k', linestyle=':')
+
+    anim = animation.FuncAnimation(fig, update, frames=episodes, interval=500, repeat=False)
+    anim.save(filename, writer='pillow', fps=2)
+    plt.close(fig)
+
 
 # ------------plotting functions-----------
+
+# Function to plot grid cells from the SR matrix
+def plot_grid_cells(agent, env, title):
+    # Reshape the SR matrix to be state_size x state_size for eigen decomposition
+    sr_matrix = np.mean(agent.M, axis=0)  # Averaging over actions
+    
+    # Perform eigen decomposition
+    eigenvalues, eigenvectors = np.linalg.eigh(sr_matrix)
+    
+    # Sort the eigenvectors by the corresponding eigenvalues in descending order
+    idx = np.argsort(-eigenvalues)
+    eigenvectors = eigenvectors[:, idx]
+    
+    # Plot the first few principal eigenvectors (grid cells)
+    num_grid_cells = 4  # Adjust the number of grid cells to plot
+    plt.figure(figsize=(10, 10))
+    
+    for i in range(num_grid_cells):
+        plt.subplot(2, 2, i + 1)
+        grid_cell = np.reshape(eigenvectors[:, i], (env.grid_size, env.grid_size))
+        plt.imshow(grid_cell, cmap='viridis')
+        plt.title(f'Eigenvector {i + 1}')
+        plt.colorbar()
+    
+    plt.suptitle(title)
+    plt.tight_layout()
+     # Create a 'plots' directory if it doesn't exist
+    if not os.path.exists('plots'):
+        os.makedirs('plots')
+    
+    # Save the plot as a PNG file
+    plt.savefig(f'plots/{title}.png')
+    
+    # Close the plot to free up memory
+    plt.close()
+
+def plot_value_functions(agent, env, title):
+    grid_size = env.grid_size
+    state_size = env.state_size
+    
+    # Compute value functions for all goals
+    value_functions = np.zeros((state_size, grid_size, grid_size))
+    for goal in range(state_size):
+        goal_reward = utils.onehot(goal, state_size)
+        value_functions[goal] = np.max(np.matmul(agent.M, goal_reward), axis=0).reshape(grid_size, grid_size)
+    
+    # Create a grid of subplots
+    fig, axes = plt.subplots(grid_size, grid_size, figsize=(20, 20))
+    fig.suptitle(title, fontsize=16)
+    
+    # Plot value function for each goal state
+    for y in range(grid_size):
+        for x in range(grid_size):
+            ax = axes[y, x]
+            
+            if [x, y] in env.blocks:
+                ax.imshow(np.zeros((grid_size, grid_size)), cmap='viridis')
+                ax.set_title(f'Goal: ({x},{y}) - Blocked')
+            else:
+                # Convert (x, y) to state index
+                goal_state = y * grid_size + x
+                ax.imshow(utils.mask_grid(value_functions[goal_state], env.blocks), cmap='viridis')
+                ax.set_title(f'Goal: ({x},{y})')
+            
+            ax.axis('off')
+    
+    plt.tight_layout()
+
+    # Create a 'plots' directory if it doesn't exist
+    if not os.path.exists('plots'):
+        os.makedirs('plots')
+    
+    # Save the plot as a PNG file
+    plt.savefig(f'plots/{title}.png')
+    
+    # Close the plot to free up memory
+    plt.close()
 
 # display the WVF learned
 def plot_wvf(agent, env):
@@ -94,7 +221,8 @@ def plot_raw_sr(sr, env, experiment_name):
     # Close the plot to free up memory
     plt.close()
 
-# Class for the successorAgent
+# --------------------------Class for the successorAgent-----------------------
+
 class TabularSuccessorAgent(object):
     def __init__(self, state_size, action_size, learning_rate, gamma, goal_size):
         self.state_size = state_size
@@ -125,8 +253,7 @@ class TabularSuccessorAgent(object):
     # generate number of goals, if no goal size specified, goal_size = state_size
 
     # ----------------------------------------------------------------
-    # TODO make sure goals arent generated in interior walls. This means max goals is equal to 40
-    # Not sure why passing in a goal size doesnt work
+    # TODO     # Not sure why passing in a goal size doesnt work 
     # ----------------------------------------------------------------
     def generate_goal_matrices(self, state_size, goal_size):
         goal_size = 40
@@ -301,13 +428,22 @@ for goal_index in goals_with_targets:
 
     print("\nRandom policy training completed.")
 
-# Check the SR on the random policy:
 
-print("Random Policy: Raw SR Matrix")
-plot_raw_sr(agent.M, env, "Random SR Matrix")
+# After random policy training
+random_policy_agent = agent
 
 
-# --------------------Random Policy Training Loop --------------------
+# Plot grid cells for random policy agent
+plot_grid_cells(random_policy_agent, env, "Grid Cells (Random Policy)")
+
+# Plot value functions for random policy agent
+plot_value_functions(random_policy_agent, env, "Value Functions (Random Policy)")
+
+# Plot raw SR matrix for random policy
+plot_raw_sr(random_policy_agent.M, env, "Random SR Matrix")
+
+
+# --------------------Epsilon greedy Training Loop --------------------
 # This loop trains the agent using a decaying epsilon greedy policy and trains it on goal slices in the arena.
 
 # Reinitialize the agent to ensure an independent learning process for the second loop
@@ -324,18 +460,27 @@ test_experiences = []
 test_lengths = []
 lifetime_td_errors = []
 
+# Ensure the videos directory exists
+if not os.path.exists('videos'):
+    os.makedirs('videos')
+
 # Training Loop
+
 for goal_index in goals_with_targets:
     goal_episodes = episodes_per_goal + (1 if remaining_episodes > 0 else 0)
     remaining_episodes = max(0, remaining_episodes - 1)
-    
+
+    # RECORDING TRAJECTORY
+    # record_agent_trajectories(env, agent, 10, train_episode_length, initial_train_epsilon, f'videos/first_10_episodes_{goal_size}_goals.gif')
+
     print(f"\nTraining on goal slice {goal_index} for {goal_episodes} episodes")
     
     # Reset epsilon for new goal
     epsilon = initial_train_epsilon
-    
+
     for episode in tqdm(range(goal_episodes), desc=f"Training goal slice {goal_index}"):
         # training phase
+
         agent_start = random_valid_position(env)
         goal_pos = env.state_to_point(np.where(agent.goals[goal_index] == 1)[0][0])
 
@@ -364,7 +509,7 @@ for goal_index in goals_with_targets:
         # Decay epsilon after each episode
         epsilon *= epsilon_decay
         epsilon = max(epsilon, 0.01)  # minimum epsilon value
-        
+
         # Test phase
         agent_start = random_valid_position(env)  
         env.reset(agent_pos=agent_start, goal_pos=goal_pos)
@@ -378,7 +523,11 @@ for goal_index in goals_with_targets:
             if env.done:
                 break
         test_lengths.append(j)
-        
+    
+    # RECORDING TRAJECTORY
+    # Record last 10 episodes
+    # record_agent_trajectories(env, agent, 10, train_episode_length, epsilon, f'videos/last_10_episodes_{goal_size}_goals.gif')
+
     print("\nTraining completed.")
 
     # Test phase
@@ -402,6 +551,33 @@ for goal_index in goals_with_targets:
 
 
 
+# After epsilon-greedy policy training
+epsilon_greedy_agent = agent
+
+
+# Plot grid cells for epsilon-greedy policy agent
+plot_grid_cells(epsilon_greedy_agent, env, "Grid Cells (Epsilon-Greedy Policy)")
+
+# Plot value functions for epsilon-greedy policy agent
+plot_value_functions(epsilon_greedy_agent, env, "Value Functions (Epsilon-Greedy Policy)")
+
+# Plot raw SR matrix for epsilon-greedy policy
+plot_raw_sr(epsilon_greedy_agent.M, env, "WVF e-Greedy SR Matrix")
+
+# Compare raw SR matrices
+plt.figure(figsize=(20, 10))
+plt.subplot(121)
+plt.imshow(np.mean(random_policy_agent.M, axis=0), cmap='viridis')
+plt.title("Random Policy SR Matrix")
+plt.colorbar()
+plt.subplot(122)
+plt.imshow(np.mean(epsilon_greedy_agent.M, axis=0), cmap='viridis')
+plt.title("Epsilon-Greedy Policy SR Matrix")
+plt.colorbar()
+plt.tight_layout()
+plt.show()
+
+
 # # ---------After training---------
 # print("Training Occupancy Plot\n")
 # print_occupancy(experiences, env)
@@ -412,10 +588,11 @@ for goal_index in goals_with_targets:
 # print("Goal Slices")
 # plot_goal_matrices(agent.goals, env)
 
+# Plot vlaue functions for epsilon greedy agent
+# plot_value_functions(agent, env, "Value Functions (Epsilon-Greedy Policy)")
 
-
-print("WVF: Raw SR Matrix")
-plot_raw_sr(agent.M, env, "WVF e-Greedy SR Matrix")
+# print("WVF: Raw SR Matrix")
+# plot_raw_sr(agent.M, env, "WVF e-Greedy SR Matrix")
 # print("plot_srs\n")
 # plot_srs(1, agent.M, env)
 # print("plot_wvf\n")
