@@ -4,6 +4,7 @@ import utils
 from sklearn.decomposition import PCA
 from gridworld import SimpleGrid
 from tqdm import tqdm
+import os
 
 cmap = plt.cm.viridis
 cmap.set_bad(color='white')
@@ -75,32 +76,23 @@ def plot_srs(action, M, env):
 # plotting the raw SR matrix
 def plot_raw_sr(sr, env, experiment_name):
     averaged_M = np.mean(sr, axis=0)
-
-    # Create a mapping from state index to grid coordinates
-    state_to_coord = {i: env.state_to_point(i) for i in range(env.state_size)}
-
-    # Create wall mask
-    wall_mask = np.zeros_like(averaged_M, dtype=bool)
-    for state, coord in state_to_coord.items():
-        if coord in env.blocks:
-            wall_mask[state, :] = True
-            wall_mask[:, state] = True
-    
-    masked_M = np.ma.array(averaged_M, mask=wall_mask)
     
     plt.figure(figsize=(10, 10))
-    im = plt.imshow(masked_M, cmap='viridis')
+    im = plt.imshow(averaged_M, cmap='viridis')
     plt.colorbar(im, label='SR Value')
     plt.title(experiment_name)
     plt.xlabel('State Index')
     plt.ylabel('State Index')
     
-    # Add grid lines to separate rooms
-    for i in range(1, env.grid_size):
-        plt.axhline(y=i * env.grid_size - 0.5, color='k', linestyle='-', linewidth=0.5)
-        plt.axvline(x=i * env.grid_size - 0.5, color='k', linestyle='-', linewidth=0.5)
+    # Create a 'plots' directory if it doesn't exist
+    if not os.path.exists('plots'):
+        os.makedirs('plots')
     
-    plt.show()
+    # Save the plot as a PNG file
+    plt.savefig(f'plots/{experiment_name}.png')
+    
+    # Close the plot to free up memory
+    plt.close()
 
 # Class for the successorAgent
 class TabularSuccessorAgent(object):
@@ -137,7 +129,7 @@ class TabularSuccessorAgent(object):
     # Not sure why passing in a goal size doesnt work
     # ----------------------------------------------------------------
     def generate_goal_matrices(self, state_size, goal_size):
-        goal_size = 40  # or whatever value you want to use
+        goal_size = 40
         self.goals = np.zeros((state_size, 7, 7), dtype=int)
         
         available_positions = [(x, y) for x in range(7) for y in range(7) if [x, y] not in env.blocks]
@@ -219,11 +211,11 @@ def get_goal_sequence(total_episodes, goal_size):
 # parameters for training
 train_episode_length = 50
 test_episode_length = 50
-episodes = 100000
+episodes = 500000
 gamma = 0.95
 lr = 5e-2
 
-initial_train_epsilon = 0.5
+initial_train_epsilon = 0.8
 epsilon_decay = 0.995
 
 test_epsilon = 0.01
@@ -243,11 +235,6 @@ print(f"Number of slices with goals: {len(goals_with_targets)}")
 # Calculate episodes per goal
 episodes_per_goal = episodes // len(goals_with_targets)
 remaining_episodes = episodes % len(goals_with_targets)
-
-experiences = []
-test_experiences = []
-test_lengths = []
-lifetime_td_errors = []
 
 # Shuffle goal order
 goal_order = np.random.permutation(goal_size)
@@ -312,7 +299,7 @@ for goal_index in goals_with_targets:
                 break
         random_policy_test_lengths.append(j)
 
-    # print("\nRandom policy training completed.")
+    print("\nRandom policy training completed.")
 
 # Check the SR on the random policy:
 
@@ -320,8 +307,23 @@ print("Random Policy: Raw SR Matrix")
 plot_raw_sr(agent.M, env, "Random SR Matrix")
 
 
-# --------------------WVF Policy Training Loop --------------------
+# --------------------Random Policy Training Loop --------------------
 # This loop trains the agent using a decaying epsilon greedy policy and trains it on goal slices in the arena.
+
+# Reinitialize the agent to ensure an independent learning process for the second loop
+agent = TabularSuccessorAgent(env.state_size, env.action_size, lr, gamma, goal_size)
+
+# Generate goal matrices
+all_goals = agent.generate_goal_matrices(agent.state_size, agent.state_size)
+
+# Filter out slices without goals
+goals_with_targets = [slice_index for slice_index in range(all_goals.shape[0]) if np.any(all_goals[slice_index])]
+
+experiences = []
+test_experiences = []
+test_lengths = []
+lifetime_td_errors = []
+
 # Training Loop
 for goal_index in goals_with_targets:
     goal_episodes = episodes_per_goal + (1 if remaining_episodes > 0 else 0)
@@ -377,7 +379,7 @@ for goal_index in goals_with_targets:
                 break
         test_lengths.append(j)
         
-    # print("\nTraining completed.")
+    print("\nTraining completed.")
 
     # Test phase
     agent_start = random_valid_position(env)  
@@ -410,9 +412,10 @@ for goal_index in goals_with_targets:
 # print("Goal Slices")
 # plot_goal_matrices(agent.goals, env)
 
+
+
 print("WVF: Raw SR Matrix")
 plot_raw_sr(agent.M, env, "WVF e-Greedy SR Matrix")
-
 # print("plot_srs\n")
 # plot_srs(1, agent.M, env)
 # print("plot_wvf\n")
