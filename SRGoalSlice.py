@@ -105,13 +105,17 @@ def plot_grid_cells(agent, env, title):
     # Close the plot to free up memory
     plt.close()
 
-def plot_value_functions(agent, env, title):
+def plot_value_functions(agent, env, title, trained_goals=None):
     grid_size = env.grid_size
     state_size = env.state_size
     
-    # Compute value functions for all goals
+    # If trained_goals is not provided, assume all goals were trained
+    if trained_goals is None:
+        trained_goals = range(state_size)
+    
+    # Compute value functions for trained goals
     value_functions = np.zeros((state_size, grid_size, grid_size))
-    for goal in range(state_size):
+    for goal in trained_goals:
         goal_reward = utils.onehot(goal, state_size)
         value_functions[goal] = np.max(np.matmul(agent.M, goal_reward), axis=0).reshape(grid_size, grid_size)
     
@@ -130,8 +134,12 @@ def plot_value_functions(agent, env, title):
             else:
                 # Convert (x, y) to state index
                 goal_state = y * grid_size + x
-                ax.imshow(utils.mask_grid(value_functions[goal_state], env.blocks), cmap='viridis')
-                ax.set_title(f'Goal: ({x},{y})')
+                if goal_state in trained_goals:
+                    ax.imshow(utils.mask_grid(value_functions[goal_state], env.blocks), cmap='viridis')
+                    ax.set_title(f'Goal: ({x},{y})')
+                else:
+                    ax.imshow(np.zeros((grid_size, grid_size)), cmap='viridis')
+                    ax.set_title(f'Goal: ({x},{y}) - Untrained')
             
             ax.axis('off')
     
@@ -334,15 +342,15 @@ def get_goal_sequence(total_episodes, goal_size):
     
     return goal_sequence
 
-# --------------------Training and Testing --------------------------------
+# --------------------Training and Testing Parameters --------------------------------
 # parameters for training
-train_episode_length = 50
-test_episode_length = 50
-episodes = 20000
+train_episode_length = 100
+test_episode_length = 100
+episodes = 100000
 gamma = 0.95
 lr = 5e-2
 
-initial_train_epsilon = 0.8
+initial_train_epsilon = 0.9
 epsilon_decay = 0.995
 
 test_epsilon = 0.01
@@ -376,71 +384,72 @@ random_policy_test_experiences = []
 random_policy_test_lengths = []
 random_policy_td_errors = []
 
-# # Training loop for random policy
-# for goal_index in goals_with_targets:
-#     goal_episodes = episodes_per_goal + (1 if remaining_episodes > 0 else 0)
-#     remaining_episodes = max(0, remaining_episodes - 1)
+# Training loop for random policy
+for goal_index in goals_with_targets:
+    goal_episodes = episodes_per_goal + (1 if remaining_episodes > 0 else 0)
+    remaining_episodes = max(0, remaining_episodes - 1)
     
-#     print(f"\nTraining on goal slice {goal_index} with random policy for {goal_episodes} episodes")
+    print(f"\nTraining on goal slice {goal_index} with random policy for {goal_episodes} episodes")
     
-#     epsilon = 1  # Set epsilon to 1 for random policy
+    epsilon = 1  # Set epsilon to 1 for random policy
     
-#     for episode in tqdm(range(goal_episodes), desc=f"Training goal slice {goal_index} (Random Policy)"):
-#         # training phase
-#         agent_start = random_valid_position(env)
-#         goal_pos = env.state_to_point(np.where(agent.goals[goal_index] == 1)[0][0])
+    for episode in tqdm(range(goal_episodes), desc=f"Training goal slice {goal_index} (Random Policy)"):
+        # training phase
+        # agent_start = random_valid_position(env)
+        agent_start = [0,0]
+        goal_pos = env.state_to_point(np.where(agent.goals[goal_index] == 1)[0][0])
 
-#         env.reset(agent_pos=agent_start, goal_pos=goal_pos)
-#         state = env.observation
-#         episodic_error = []
+        env.reset(agent_pos=agent_start, goal_pos=goal_pos)
+        state = env.observation
+        episodic_error = []
 
-#         for j in range(train_episode_length):
-#             action = agent.sample_action(state, epsilon=epsilon)
-#             reward = env.step(action)
-#             next_state = env.observation
-#             done = env.done
-#             random_policy_experiences.append([state, action, next_state, reward])
-#             experience = [state, action, next_state, reward, done]
+        for j in range(train_episode_length):
+            action = agent.sample_action(state, epsilon=epsilon)
+            reward = env.step(action)
+            next_state = env.observation
+            done = env.done
+            random_policy_experiences.append([state, action, next_state, reward])
+            experience = [state, action, next_state, reward, done]
             
-#             td_sr = agent.update_sr(experience)
-#             td_w = agent.update_w(experience)
-#             episodic_error.append(np.mean(np.abs(td_sr)))
+            td_sr = agent.update_sr(experience)
+            td_w = agent.update_w(experience)
+            episodic_error.append(np.mean(np.abs(td_sr)))
             
-#             state = next_state
-#             if done:
-#                 break
+            state = next_state
+            if done:
+                break
         
-#         random_policy_td_errors.append(np.mean(episodic_error))
+        random_policy_td_errors.append(np.mean(episodic_error))
         
-#         # Test phase
-#         agent_start = random_valid_position(env)
-#         env.reset(agent_pos=agent_start, goal_pos=goal_pos)
-#         state = env.observation
-#         for j in range(test_episode_length):
-#             action = agent.sample_action(state, epsilon=test_epsilon)
-#             reward = env.step(action)
-#             state_next = env.observation
-#             random_policy_test_experiences.append([state, action, state_next, reward])
-#             state = state_next
-#             if env.done:
-#                 break
-#         random_policy_test_lengths.append(j)
+        # Test phase
+        agent_start = random_valid_position(env)
+        env.reset(agent_pos=agent_start, goal_pos=goal_pos)
+        state = env.observation
+        for j in range(test_episode_length):
+            action = agent.sample_action(state, epsilon=test_epsilon)
+            reward = env.step(action)
+            state_next = env.observation
+            random_policy_test_experiences.append([state, action, state_next, reward])
+            state = state_next
+            if env.done:
+                break
+        random_policy_test_lengths.append(j)
 
-#     print("\nRandom policy training completed.")
-
-
-# # After random policy training
-# random_policy_agent = agent
+    print("\nRandom policy training completed.")
 
 
-# # Plot grid cells for random policy agent
-# plot_grid_cells(random_policy_agent, env, "Grid Cells (Random Policy)")
+# After random policy training
+random_policy_agent = agent
 
-# # Plot value functions for random policy agent
-# plot_value_functions(random_policy_agent, env, "Value Functions (Random Policy)")
 
-# # Plot raw SR matrix for random policy
-# plot_raw_sr(random_policy_agent.M, env, "Random SR Matrix")
+# Plot grid cells for random policy agent
+plot_grid_cells(random_policy_agent, env, "Grid Cells (Random Policy)")
+
+# Plot value functions for random policy agent
+plot_value_functions(random_policy_agent, env, "Value Functions (Random Policy)")
+
+# Plot raw SR matrix for random policy
+plot_raw_sr(random_policy_agent.M, env, "Random SR Matrix")
 
 
 # --------------------Epsilon greedy Training Loop --------------------
@@ -487,7 +496,8 @@ for goal_index in goals_with_targets:
     for episode in tqdm(range(goal_episodes), desc=f"Training goal slice {goal_index}"):
         # training phase
 
-        agent_start = random_valid_position(env)
+        # agent_start = random_valid_position(env)
+        agent_start = [0,0]
         goal_pos = env.state_to_point(np.where(agent.goals[goal_index] == 1)[0][0])
 
         env.reset(agent_pos=agent_start, goal_pos=goal_pos)
@@ -556,10 +566,12 @@ for goal_index in goals_with_targets:
     #                   np.mean(test_lengths[-50:])), end='')
 
 
+# After training
+trained_goals = goals_with_targets  # Assuming this contains the indices of the goals used in training
+# plot_value_functions(agent, env, "Value Functions (Epsilon-Greedy Policy)", trained_goals)
 
 # After epsilon-greedy policy training
 epsilon_greedy_agent = agent
-
 
 # Plot grid cells for epsilon-greedy policy agent
 plot_grid_cells(epsilon_greedy_agent, env, "Grid Cells (Epsilon-Greedy Policy)")
@@ -570,18 +582,18 @@ plot_value_functions(epsilon_greedy_agent, env, "Value Functions (Epsilon-Greedy
 # Plot raw SR matrix for epsilon-greedy policy
 plot_raw_sr(epsilon_greedy_agent.M, env, "WVF e-Greedy SR Matrix")
 
-# Compare raw SR matrices
-plt.figure(figsize=(20, 10))
-plt.subplot(121)
-plt.imshow(np.mean(random_policy_agent.M, axis=0), cmap='viridis')
-plt.title("Random Policy SR Matrix")
-plt.colorbar()
-plt.subplot(122)
-plt.imshow(np.mean(epsilon_greedy_agent.M, axis=0), cmap='viridis')
-plt.title("Epsilon-Greedy Policy SR Matrix")
-plt.colorbar()
-plt.tight_layout()
-plt.show()
+# # Compare raw SR matrices
+# plt.figure(figsize=(20, 10))
+# plt.subplot(121)
+# plt.imshow(np.mean(random_policy_agent.M, axis=0), cmap='viridis')
+# plt.title("Random Policy SR Matrix")
+# plt.colorbar()
+# plt.subplot(122)
+# plt.imshow(np.mean(epsilon_greedy_agent.M, axis=0), cmap='viridis')
+# plt.title("Epsilon-Greedy Policy SR Matrix")
+# plt.colorbar()
+# plt.tight_layout()
+# plt.show()
 
 
 # # ---------After training---------
