@@ -338,7 +338,7 @@ def get_goal_sequence(total_episodes, goal_size):
 # parameters for training
 train_episode_length = 50
 test_episode_length = 50
-episodes = 500000
+episodes = 20000
 gamma = 0.95
 lr = 5e-2
 
@@ -376,71 +376,71 @@ random_policy_test_experiences = []
 random_policy_test_lengths = []
 random_policy_td_errors = []
 
-# Training loop for random policy
-for goal_index in goals_with_targets:
-    goal_episodes = episodes_per_goal + (1 if remaining_episodes > 0 else 0)
-    remaining_episodes = max(0, remaining_episodes - 1)
+# # Training loop for random policy
+# for goal_index in goals_with_targets:
+#     goal_episodes = episodes_per_goal + (1 if remaining_episodes > 0 else 0)
+#     remaining_episodes = max(0, remaining_episodes - 1)
     
-    print(f"\nTraining on goal slice {goal_index} with random policy for {goal_episodes} episodes")
+#     print(f"\nTraining on goal slice {goal_index} with random policy for {goal_episodes} episodes")
     
-    epsilon = 1  # Set epsilon to 1 for random policy
+#     epsilon = 1  # Set epsilon to 1 for random policy
     
-    for episode in tqdm(range(goal_episodes), desc=f"Training goal slice {goal_index} (Random Policy)"):
-        # training phase
-        agent_start = random_valid_position(env)
-        goal_pos = env.state_to_point(np.where(agent.goals[goal_index] == 1)[0][0])
+#     for episode in tqdm(range(goal_episodes), desc=f"Training goal slice {goal_index} (Random Policy)"):
+#         # training phase
+#         agent_start = random_valid_position(env)
+#         goal_pos = env.state_to_point(np.where(agent.goals[goal_index] == 1)[0][0])
 
-        env.reset(agent_pos=agent_start, goal_pos=goal_pos)
-        state = env.observation
-        episodic_error = []
+#         env.reset(agent_pos=agent_start, goal_pos=goal_pos)
+#         state = env.observation
+#         episodic_error = []
 
-        for j in range(train_episode_length):
-            action = agent.sample_action(state, epsilon=epsilon)
-            reward = env.step(action)
-            next_state = env.observation
-            done = env.done
-            random_policy_experiences.append([state, action, next_state, reward])
-            experience = [state, action, next_state, reward, done]
+#         for j in range(train_episode_length):
+#             action = agent.sample_action(state, epsilon=epsilon)
+#             reward = env.step(action)
+#             next_state = env.observation
+#             done = env.done
+#             random_policy_experiences.append([state, action, next_state, reward])
+#             experience = [state, action, next_state, reward, done]
             
-            td_sr = agent.update_sr(experience)
-            td_w = agent.update_w(experience)
-            episodic_error.append(np.mean(np.abs(td_sr)))
+#             td_sr = agent.update_sr(experience)
+#             td_w = agent.update_w(experience)
+#             episodic_error.append(np.mean(np.abs(td_sr)))
             
-            state = next_state
-            if done:
-                break
+#             state = next_state
+#             if done:
+#                 break
         
-        random_policy_td_errors.append(np.mean(episodic_error))
+#         random_policy_td_errors.append(np.mean(episodic_error))
         
-        # Test phase
-        agent_start = random_valid_position(env)
-        env.reset(agent_pos=agent_start, goal_pos=goal_pos)
-        state = env.observation
-        for j in range(test_episode_length):
-            action = agent.sample_action(state, epsilon=test_epsilon)
-            reward = env.step(action)
-            state_next = env.observation
-            random_policy_test_experiences.append([state, action, state_next, reward])
-            state = state_next
-            if env.done:
-                break
-        random_policy_test_lengths.append(j)
+#         # Test phase
+#         agent_start = random_valid_position(env)
+#         env.reset(agent_pos=agent_start, goal_pos=goal_pos)
+#         state = env.observation
+#         for j in range(test_episode_length):
+#             action = agent.sample_action(state, epsilon=test_epsilon)
+#             reward = env.step(action)
+#             state_next = env.observation
+#             random_policy_test_experiences.append([state, action, state_next, reward])
+#             state = state_next
+#             if env.done:
+#                 break
+#         random_policy_test_lengths.append(j)
 
-    print("\nRandom policy training completed.")
-
-
-# After random policy training
-random_policy_agent = agent
+#     print("\nRandom policy training completed.")
 
 
-# Plot grid cells for random policy agent
-plot_grid_cells(random_policy_agent, env, "Grid Cells (Random Policy)")
+# # After random policy training
+# random_policy_agent = agent
 
-# Plot value functions for random policy agent
-plot_value_functions(random_policy_agent, env, "Value Functions (Random Policy)")
 
-# Plot raw SR matrix for random policy
-plot_raw_sr(random_policy_agent.M, env, "Random SR Matrix")
+# # Plot grid cells for random policy agent
+# plot_grid_cells(random_policy_agent, env, "Grid Cells (Random Policy)")
+
+# # Plot value functions for random policy agent
+# plot_value_functions(random_policy_agent, env, "Value Functions (Random Policy)")
+
+# # Plot raw SR matrix for random policy
+# plot_raw_sr(random_policy_agent.M, env, "Random SR Matrix")
 
 
 # --------------------Epsilon greedy Training Loop --------------------
@@ -460,12 +460,18 @@ test_experiences = []
 test_lengths = []
 lifetime_td_errors = []
 
+# Shuffle the order of goals with targets
+np.random.shuffle(goals_with_targets)
+
+# Calculate episodes per goal
+episodes_per_goal = episodes // len(goals_with_targets)
+remaining_episodes = episodes % len(goals_with_targets)
+
 # Ensure the videos directory exists
 if not os.path.exists('videos'):
     os.makedirs('videos')
 
 # Training Loop
-
 for goal_index in goals_with_targets:
     goal_episodes = episodes_per_goal + (1 if remaining_episodes > 0 else 0)
     remaining_episodes = max(0, remaining_episodes - 1)
@@ -488,7 +494,7 @@ for goal_index in goals_with_targets:
         state = env.observation
         episodic_error = []
 
-        for j in range(train_episode_length):
+        for step in range(train_episode_length):
             action = agent.sample_action(state, epsilon=epsilon)
             reward = env.step(action)
             next_state = env.observation
@@ -508,7 +514,7 @@ for goal_index in goals_with_targets:
 
         # Decay epsilon after each episode
         epsilon *= epsilon_decay
-        epsilon = max(epsilon, 0.01)  # minimum epsilon value
+        epsilon = max(epsilon, 0.05)  # minimum epsilon value
 
         # Test phase
         agent_start = random_valid_position(env)  
