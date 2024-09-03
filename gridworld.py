@@ -177,7 +177,7 @@ class SimpleGrid(object):
         
         if self.agent_pos == self.goal_pos:
             self.done = True
-            return 10.0
+            return 1.0
         elif list(self.agent_pos) in self.blocks:
             self.agent_pos = [max(0, min(self.grid_size-1, self.agent_pos[i] - move_array[i])) for i in range(2)]
             return -0.1  # Small penalty for hitting a wall
