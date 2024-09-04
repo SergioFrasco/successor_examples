@@ -12,12 +12,12 @@ cmap = plt.cm.viridis
 cmap.set_bad(color='white')
 
 grid_size = 11
-pattern = "four_rooms"
+pattern = "empty"
 env = SimpleGrid(grid_size, block_pattern=pattern, obs_mode="index")
 env.reset(agent_pos=[0, 0], goal_pos=[0, grid_size - 1])
 
 # Plot the arena
-print("Four Rooms Arena: ")
+# print("Four Rooms Arena: ")
 
 # ------------------ Recording Functions --------------------------------
 def record_agent_trajectories(env, agent, episodes, episode_length, epsilon, filename):
@@ -235,19 +235,26 @@ class TabularSuccessorAgent(object):
         self.state_size = state_size
         self.action_size = action_size
         self.M = np.zeros((action_size, state_size, state_size))
-        self.w = np.zeros(state_size)
+        self.w = np.zeros((goal_size, state_size))
         self.learning_rate = learning_rate
         self.gamma = gamma
         self.goal_size = goal_size
         self.goals = np.zeros((state_size, grid_size, grid_size), dtype=int)
     
+    # OLD FUNCTION
     # Computes action values by combining the SR with the current reward prediction (w) or a specified goal
+    # def Q_estimates(self, state, goal=None):
+    #     if goal is None:
+    #         goal = self.w
+    #     else:
+    #         goal = utils.onehot(goal, self.state_size)
+    #     return np.matmul(self.M[:, state, :], goal)
+    
     def Q_estimates(self, state, goal=None):
         if goal is None:
-            goal = self.w
-        else:
-            goal = utils.onehot(goal, self.state_size)
-        return np.matmul(self.M[:, state, :], goal)
+            goal = np.argmax(np.sum(self.w, axis=1))
+        goal_reward = self.goals[goal].flatten()
+        return np.matmul(self.M[:, state, :], self.w[goal])
     
     # epsilon greedy policy for action selection
     def sample_action(self, state, goal=None, epsilon=0.0):
@@ -263,7 +270,7 @@ class TabularSuccessorAgent(object):
     # TODO     # Not sure why passing in a goal size doesnt work 
     # ----------------------------------------------------------------
     def generate_goal_matrices(self, state_size, goal_size):
-        goal_size = 104 # this is 40 for grid size = 7 and 104 for grid_size = 11
+        goal_size = 120 # this is 40 for grid size = 7 and 104 for grid_size = 11
         self.goals = np.zeros((state_size, grid_size, grid_size), dtype=int)
         
         available_positions = [(x, y) for x in range(grid_size) for y in range(grid_size) if [x, y] not in env.blocks]
@@ -277,13 +284,26 @@ class TabularSuccessorAgent(object):
         
         return self.goals
 
+    # OLD W UPDATE
     # Updates the reward prediction weights based on the rewards observed
+    # def update_w(self, current_exp):
+    #     s_1 = current_exp[2]
+    #     r = current_exp[3]
+    #     error = r - self.w[s_1]
+    #     self.w[s_1] += self.learning_rate * error        
+    #     return error
+    
     def update_w(self, current_exp):
-        s_1 = current_exp[2]
-        r = current_exp[3]
-        error = r - self.w[s_1]
-        self.w[s_1] += self.learning_rate * error        
-        return error
+        s_1 = current_exp[2]  # next state
+        r = current_exp[3]  # reward received
+        
+        for goal in range(self.goal_size):
+            goal_reward = self.goals[goal].flatten()  # Use the goal matrix instead of onehot
+            predicted_reward = np.dot(self.w[goal], goal_reward)
+            error = r - predicted_reward
+            self.w[goal] += self.learning_rate * error * goal_reward
+        
+        return error # might want to return an average error instead, ask supervisors
     
     # The core learning method that updates the SR using Q-learning.
     def update_sr(self, current_exp):
@@ -349,7 +369,7 @@ def get_goal_sequence(total_episodes, goal_size):
 # parameters for training
 train_episode_length = 40
 test_episode_length = 40
-episodes = 500000
+episodes = 50000
 gamma = 0.95
 lr = 5e-2
 
@@ -357,7 +377,7 @@ initial_train_epsilon = 0.6
 epsilon_decay = 0.995
 
 test_epsilon = 0.01
-goal_size = 1 # Testing with a goal from every state
+goal_size = 120 # Testing with a goal for every state
 
 # Initialize the agent and environment
 agent = TabularSuccessorAgent(env.state_size, env.action_size, lr, gamma, goal_size)
@@ -382,10 +402,10 @@ np.random.shuffle(goals_with_targets)
 # --------------------Random Policy Training Loop --------------------
 # This loop trains the agent using a random policy (epsilon = 1)
 
-random_policy_experiences = []
-random_policy_test_experiences = []
-random_policy_test_lengths = []
-random_policy_td_errors = []
+# random_policy_experiences = []
+# random_policy_test_experiences = []
+# random_policy_test_lengths = []
+# random_policy_td_errors = []
 
 # # Training loop for random policy
 # for goal_index in goals_with_targets:
@@ -483,7 +503,8 @@ remaining_episodes = episodes % len(goals_with_targets)
 if not os.path.exists('videos'):
     os.makedirs('videos')
 
-# Training Loop
+
+    
 for goal_index in goals_with_targets:
     goal_episodes = episodes_per_goal + (1 if remaining_episodes > 0 else 0)
     remaining_episodes = max(0, remaining_episodes - 1)
@@ -493,14 +514,10 @@ for goal_index in goals_with_targets:
 
     print(f"\nTraining on goal slice {goal_index} for {goal_episodes} episodes")
     
-    # Reset epsilon for new goal
     epsilon = initial_train_epsilon
 
     for episode in tqdm(range(goal_episodes), desc=f"Training goal slice {goal_index}"):
-        # training phase
-
         agent_start = random_valid_position(env)
-        # agent_start = [0,0]
         goal_pos = env.state_to_point(np.where(agent.goals[goal_index] == 1)[0][0])
 
         env.reset(agent_pos=agent_start, goal_pos=goal_pos)
@@ -508,7 +525,7 @@ for goal_index in goals_with_targets:
         episodic_error = []
 
         for step in range(train_episode_length):
-            action = agent.sample_action(state, epsilon=epsilon)
+            action = agent.sample_action(state, goal=goal_index, epsilon=epsilon)
             reward = env.step(action)
             next_state = env.observation
             done = env.done
@@ -516,7 +533,7 @@ for goal_index in goals_with_targets:
             experience = [state, action, next_state, reward, done]
             
             td_sr = agent.update_sr(experience)
-            td_w = agent.update_w(experience)
+            td_w = agent.update_w(experience)  # This now updates for all goals
             episodic_error.append(np.mean(np.abs(td_sr)))
             
             state = next_state
