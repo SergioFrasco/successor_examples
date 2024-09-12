@@ -367,8 +367,8 @@ def get_goal_sequence(total_episodes, goal_size):
 
 # --------------------Training and Testing Parameters --------------------------------
 # parameters for training
-train_episode_length = 50
-test_episode_length = 50
+train_episode_length = 40
+test_episode_length = 40
 episodes = 100000
 gamma = 0.95
 lr = 5e-2
