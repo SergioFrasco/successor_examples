@@ -240,6 +240,7 @@ class TabularSuccessorAgent(object):
         self.gamma = gamma
         self.goal_size = goal_size
         self.goals = np.zeros((state_size, grid_size, grid_size), dtype=int)
+        self.generate_goal_matrices()
     
     # OLD FUNCTION
     # Computes action values by combining the SR with the current reward prediction (w) or a specified goal
@@ -265,16 +266,11 @@ class TabularSuccessorAgent(object):
             return np.argmax(Qs)
     
     # generate number of goals, if no goal size specified, goal_size = state_size
-
-    # ----------------------------------------------------------------
-    # TODO     # Not sure why passing in a goal size doesnt work 
-    # ----------------------------------------------------------------
-    def generate_goal_matrices(self, state_size, goal_size):
-        goal_size = 120 # this is 40 for grid size = 7 and 104 for grid_size = 11
-        self.goals = np.zeros((state_size, grid_size, grid_size), dtype=int)
+    def generate_goal_matrices(self):
+        self.goals = np.zeros((self.goal_size, grid_size, grid_size), dtype=int)
         
         available_positions = [(x, y) for x in range(grid_size) for y in range(grid_size) if [x, y] not in env.blocks]
-        for slice_index in range(min(state_size, goal_size)):
+        for slice_index in range(self.goal_size):
             if slice_index < len(available_positions):
                 x, y = available_positions[slice_index]
                 self.goals[slice_index, x, y] = 1
@@ -367,26 +363,23 @@ def get_goal_sequence(total_episodes, goal_size):
 
 # --------------------Training and Testing Parameters --------------------------------
 # parameters for training
-train_episode_length = 40
-test_episode_length = 40
+train_episode_length = 60
+test_episode_length = 60
 episodes = 100000
-gamma = 0.95
-lr = 5e-2
+gamma = 0.8
+lr = 0.01
 
 initial_train_epsilon = 0.6
 epsilon_decay = 0.995
 
 test_epsilon = 0.01
-goal_size = 120 # Testing with a goal for every state
+goal_size = 121 # Testing with a goal for every state
 
 # Initialize the agent and environment
 agent = TabularSuccessorAgent(env.state_size, env.action_size, lr, gamma, goal_size)
 
-# Generate goal matrices
-all_goals = agent.generate_goal_matrices(agent.state_size, agent.state_size)
-
 # Filter out slices without goals
-goals_with_targets = [slice_index for slice_index in range(all_goals.shape[0]) if np.any(all_goals[slice_index])]
+goals_with_targets = [slice_index for slice_index in range(agent.goals.shape[0]) if np.any(agent.goals[slice_index])]
 
 print(f"Number of slices with goals: {len(goals_with_targets)}")
 
@@ -410,11 +403,8 @@ random_policy_td_errors = []
 # Reinitialize the agent
 random_policy_agent = TabularSuccessorAgent(env.state_size, env.action_size, lr, gamma, goal_size)
 
-# Generate goal matrices
-all_goals = random_policy_agent.generate_goal_matrices(random_policy_agent.state_size, random_policy_agent.state_size)
-
 # Filter out slices without goals
-goals_with_targets = [slice_index for slice_index in range(all_goals.shape[0]) if np.any(all_goals[slice_index])]
+goals_with_targets = [slice_index for slice_index in range(agent.goals.shape[0]) if np.any(agent.goals[slice_index])]
 
 print(f"Number of slices with goals: {len(goals_with_targets)}")
 
@@ -486,11 +476,8 @@ plot_raw_sr(random_policy_agent.M, env, "Random SR Matrix")
 # Reinitialize the agent to ensure an independent learning process for the second loop
 epsilon_greedy_agent = TabularSuccessorAgent(env.state_size, env.action_size, lr, gamma, goal_size)
 
-# Generate goal matrices
-all_goals = epsilon_greedy_agent.generate_goal_matrices(epsilon_greedy_agent.state_size, epsilon_greedy_agent.state_size)
-
 # Filter out slices without goals
-goals_with_targets = [slice_index for slice_index in range(all_goals.shape[0]) if np.any(all_goals[slice_index])]
+goals_with_targets = [slice_index for slice_index in range(agent.goals.shape[0]) if np.any(agent.goals[slice_index])]
 
 experiences = []
 test_experiences = []
