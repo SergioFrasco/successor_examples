@@ -11,7 +11,7 @@ from sklearn.decomposition import PCA #For grid cell plotting
 cmap = plt.cm.viridis
 cmap.set_bad(color='white')
 
-grid_size = 11
+grid_size = 20
 pattern = "empty"
 env = SimpleGrid(grid_size, block_pattern=pattern, obs_mode="index")
 env.reset(agent_pos=[0, 0], goal_pos=[0, grid_size - 1])
@@ -365,7 +365,7 @@ def get_goal_sequence(total_episodes, goal_size):
 # parameters for training
 train_episode_length = 60
 test_episode_length = 60
-episodes = 100000
+episodes = 1000
 gamma = 0.8
 lr = 0.01
 
@@ -373,7 +373,7 @@ initial_train_epsilon = 0.6
 epsilon_decay = 0.995
 
 test_epsilon = 0.01
-goal_size = 121 # Testing with a goal for every state
+goal_size = 400 # Testing with a goal for every state
 
 # Initialize the agent and environment
 agent = TabularSuccessorAgent(env.state_size, env.action_size, lr, gamma, goal_size)
@@ -466,7 +466,7 @@ print("\nRandom policy training completed.")
 # After random policy training
 plot_grid_cells(random_policy_agent, env, "Grid Cells (Random Policy)")
 plot_value_functions(random_policy_agent, env, "Value Functions (Random Policy)")
-plot_raw_sr(random_policy_agent.M, env, "Random SR Matrix")
+plot_raw_sr(random_policy_agent.M, env, "SR Matrix Random")
 
 
 
@@ -548,7 +548,7 @@ print("\nEpsilon-greedy training completed.")
 # After epsilon-greedy policy training
 plot_grid_cells(epsilon_greedy_agent, env, "Grid Cells (Epsilon-Greedy Policy)")
 plot_value_functions(epsilon_greedy_agent, env, "Value Functions (Epsilon-Greedy Policy)")
-plot_raw_sr(epsilon_greedy_agent.M, env, "WVF e-Greedy SR Matrix")
+plot_raw_sr(epsilon_greedy_agent.M, env, "SR Matrix WVF e-Greedy")
 
 # # Compare raw SR matrices
 # plt.figure(figsize=(20, 10))
