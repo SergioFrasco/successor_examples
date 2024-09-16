@@ -11,7 +11,7 @@ from sklearn.decomposition import PCA #For grid cell plotting
 cmap = plt.cm.viridis
 cmap.set_bad(color='white')
 
-grid_size = 20
+grid_size = 50
 pattern = "empty"
 env = SimpleGrid(grid_size, block_pattern=pattern, obs_mode="index")
 env.reset(agent_pos=[0, 0], goal_pos=[0, grid_size - 1])
@@ -365,7 +365,7 @@ def get_goal_sequence(total_episodes, goal_size):
 # parameters for training
 train_episode_length = 60
 test_episode_length = 60
-episodes = 1000
+episodes = 1000000
 gamma = 0.8
 lr = 0.01
 
