@@ -4,6 +4,6 @@
 #SBATCH --error=/home-mscluster/sfrasco/error.txt
 #SBATCH --ntasks=1
 #SBATCH --time=72:00:00
-#SBATCH --partition=bigbatch
+#SBATCH --partition=stampede
 
 python3 SRGoalSlice.py &
