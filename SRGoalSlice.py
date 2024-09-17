@@ -11,7 +11,7 @@ from sklearn.decomposition import PCA #For grid cell plotting
 cmap = plt.cm.viridis
 cmap.set_bad(color='white')
 
-grid_size = 50
+grid_size = 20
 pattern = "empty"
 env = SimpleGrid(grid_size, block_pattern=pattern, obs_mode="index")
 env.reset(agent_pos=[0, 0], goal_pos=[0, grid_size - 1])
@@ -365,7 +365,7 @@ def get_goal_sequence(total_episodes, goal_size):
 # parameters for training
 train_episode_length = 60
 test_episode_length = 60
-episodes = 1000000
+episodes = 10000
 gamma = 0.8
 lr = 0.01
 
@@ -416,7 +416,7 @@ remaining_episodes = episodes % len(goals_with_targets)
 np.random.shuffle(goals_with_targets)
 
 # Training loop for random policy
-for episode in range(episodes):
+for episode in tqdm(range(episodes), desc="Training with Random Policy"):
     goal_index = goals_with_targets[episode % len(goals_with_targets)]
     
     epsilon = 1  # Set epsilon to 1 for random policy
@@ -497,7 +497,7 @@ if not os.path.exists('videos'):
 
 epsilon = initial_train_epsilon
 
-for episode in range(episodes):
+for episode in tqdm(range(episodes), desc="Training with Epsilon-Greedy Policy"):
     goal_index = goals_with_targets[episode % len(goals_with_targets)]
 
     agent_start = random_valid_position(env)
