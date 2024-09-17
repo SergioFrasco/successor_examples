@@ -416,7 +416,7 @@ remaining_episodes = episodes % len(goals_with_targets)
 np.random.shuffle(goals_with_targets)
 
 # Training loop for random policy
-for episode in tqdm(range(episodes), desc="Training with Random Policy"):
+for episode in range(episodes):
     goal_index = goals_with_targets[episode % len(goals_with_targets)]
     
     epsilon = 1  # Set epsilon to 1 for random policy
@@ -497,7 +497,7 @@ if not os.path.exists('videos'):
 
 epsilon = initial_train_epsilon
 
-for episode in tqdm(range(episodes), desc="Training with Epsilon-Greedy Policy"):
+for episode in range(episodes):
     goal_index = goals_with_targets[episode % len(goals_with_targets)]
 
     agent_start = random_valid_position(env)
