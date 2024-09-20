@@ -1,9 +1,11 @@
 #!/bin/bash
-#SBATCH --job-name=rats
+#SBATCH --job-name=compneuro
 #SBATCH --output=/home-mscluster/sfrasco/result.txt
 #SBATCH --error=/home-mscluster/sfrasco/error.txt
 #SBATCH --ntasks=1
 #SBATCH --time=72:00:00
 #SBATCH --partition=bigbatch
 
-python SRGoalSlice.py 
+python SRGoalSlice.py &
+
+wait
