@@ -12,7 +12,7 @@ import random
 cmap = plt.cm.viridis
 cmap.set_bad(color='white')
 
-grid_size = 10
+grid_size = 20
 pattern = "empty"
 env = SimpleGrid(grid_size, block_pattern=pattern, obs_mode="index")
 env.reset(agent_pos=[0, 0], goal_pos=[0, grid_size - 1])
@@ -387,9 +387,9 @@ def get_goal_sequence(total_episodes, goal_size):
 
 # --------------------Training and Testing Parameters --------------------------------
 # parameters for training
-train_episode_length = 60
-test_episode_length = 60
-episodes = 1000000
+train_episode_length = 100
+test_episode_length = 100
+episodes = 10000
 gamma = 0.8
 lr = 0.01
 
@@ -397,7 +397,7 @@ initial_train_epsilon = 0.6
 epsilon_decay = 0.995
 
 test_epsilon = 0.01
-goal_size = 100 # Testing with a goal for every state
+goal_size = 400 # Testing with a goal for every state
 
 # Initialize the agent and environment
 agent = TabularSuccessorAgent(env.state_size, env.action_size, lr, gamma, goal_size)
@@ -522,8 +522,8 @@ if not os.path.exists('videos'):
 epsilon = initial_train_epsilon
 
 
-# print("plotting goals")
-# plot_goal_matrices(epsilon_greedy_agent.goals, env)
+print("plotting goals")
+plot_goal_matrices(epsilon_greedy_agent.goals, env)
 
 for episode in range(episodes):
     goal_index = goals_with_targets[episode % len(goals_with_targets)]
