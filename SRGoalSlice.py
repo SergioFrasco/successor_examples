@@ -389,7 +389,7 @@ def get_goal_sequence(total_episodes, goal_size):
 # parameters for training
 train_episode_length = 60
 test_episode_length = 60
-episodes = 10000
+episodes = 1000000
 gamma = 0.8
 lr = 0.01
 
@@ -397,7 +397,7 @@ initial_train_epsilon = 0.6
 epsilon_decay = 0.995
 
 test_epsilon = 0.01
-goal_size = 49 # Testing with a goal for every state
+goal_size = 100 # Testing with a goal for every state
 
 # Initialize the agent and environment
 agent = TabularSuccessorAgent(env.state_size, env.action_size, lr, gamma, goal_size)
@@ -522,10 +522,10 @@ if not os.path.exists('videos'):
 epsilon = initial_train_epsilon
 
 
-print("plotting goals")
-plot_goal_matrices(epsilon_greedy_agent.goals, env)
+# print("plotting goals")
+# plot_goal_matrices(epsilon_greedy_agent.goals, env)
 
-for episode in tqdm(range(episodes), "Training for Epsilod-Greedy"):
+for episode in range(episodes):
     goal_index = goals_with_targets[episode % len(goals_with_targets)]
 
     agent_start = random_valid_position(env)
