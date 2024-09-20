@@ -6,4 +6,4 @@
 #SBATCH --time=72:00:00
 #SBATCH --partition=bigbatch
 
-python SRGoalSlice.py &
+python SRGoalSlice.py 

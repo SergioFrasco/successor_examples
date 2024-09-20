@@ -7,11 +7,12 @@ from tqdm import tqdm
 import os
 import matplotlib.animation as animation
 from sklearn.decomposition import PCA #For grid cell plotting
+import random
 
 cmap = plt.cm.viridis
 cmap.set_bad(color='white')
 
-grid_size = 20
+grid_size = 10
 pattern = "empty"
 env = SimpleGrid(grid_size, block_pattern=pattern, obs_mode="index")
 env.reset(agent_pos=[0, 0], goal_pos=[0, grid_size - 1])
@@ -265,20 +266,43 @@ class TabularSuccessorAgent(object):
             Qs = self.Q_estimates(state, goal)
             return np.argmax(Qs)
     
-    # generate number of goals, if no goal size specified, goal_size = state_size
+
     def generate_goal_matrices(self):
+        # Initialize the goal matrix with zeros
         self.goals = np.zeros((self.goal_size, grid_size, grid_size), dtype=int)
         
-        available_positions = [(x, y) for x in range(grid_size) for y in range(grid_size) if [x, y] not in env.blocks]
+        # Get all available positions (excluding blocks)
+        available_positions = [(x, y) for x in range(grid_size) for y in range(grid_size) if (x, y) not in env.blocks]
+        
+        # Check if we have enough available positions to place the goals
+        if self.goal_size > len(available_positions):
+            raise ValueError("Not enough available positions to place all goals.")
+        
+        # Shuffle the available positions to ensure random placement
+        random.shuffle(available_positions)
+        
+        # Assign a unique random position to each slice
         for slice_index in range(self.goal_size):
-            if slice_index < len(available_positions):
-                x, y = available_positions[slice_index]
-                self.goals[slice_index, x, y] = 1
-                print(f"Slice {slice_index}: Position ({x}, {y}) set as goal")
-            else:
-                break
+            x, y = available_positions[slice_index]
+            self.goals[slice_index, x, y] = 1
+            print(f"Slice {slice_index}: Position ({x}, {y}) set as goal")
         
         return self.goals
+
+    # generate number of goals, if no goal size specified, goal_size = state_size
+    # def generate_goal_matrices(self):
+    #     self.goals = np.zeros((self.goal_size, grid_size, grid_size), dtype=int)
+        
+    #     available_positions = [(x, y) for x in range(grid_size) for y in range(grid_size) if [x, y] not in env.blocks]
+    #     for slice_index in range(self.goal_size):
+    #         if slice_index < len(available_positions):
+    #             x, y = available_positions[slice_index]
+    #             self.goals[slice_index, x, y] = 1
+    #             print(f"Slice {slice_index}: Position ({x}, {y}) set as goal")
+    #         else:
+    #             break
+        
+    #     return self.goals
 
     # OLD W UPDATE
     # Updates the reward prediction weights based on the rewards observed
@@ -373,7 +397,7 @@ initial_train_epsilon = 0.6
 epsilon_decay = 0.995
 
 test_epsilon = 0.01
-goal_size = 2500 # Testing with a goal for every state
+goal_size = 49 # Testing with a goal for every state
 
 # Initialize the agent and environment
 agent = TabularSuccessorAgent(env.state_size, env.action_size, lr, gamma, goal_size)
@@ -392,81 +416,81 @@ goal_order = np.random.permutation(goal_size)
 # Shuffle the order of goals with targets
 np.random.shuffle(goals_with_targets)
 
-# --------------------Random Policy Training Loop --------------------
-# This loop trains the agent using a random policy (epsilon = 1)
+# # --------------------Random Policy Training Loop --------------------
+# # This loop trains the agent using a random policy (epsilon = 1)
 
-random_policy_experiences = []
-random_policy_test_experiences = []
-random_policy_test_lengths = []
-random_policy_td_errors = []
+# random_policy_experiences = []
+# random_policy_test_experiences = []
+# random_policy_test_lengths = []
+# random_policy_td_errors = []
 
-# Reinitialize the agent
-random_policy_agent = TabularSuccessorAgent(env.state_size, env.action_size, lr, gamma, goal_size)
+# # Reinitialize the agent
+# random_policy_agent = TabularSuccessorAgent(env.state_size, env.action_size, lr, gamma, goal_size)
 
-# Filter out slices without goals
-goals_with_targets = [slice_index for slice_index in range(agent.goals.shape[0]) if np.any(agent.goals[slice_index])]
+# # Filter out slices without goals
+# goals_with_targets = [slice_index for slice_index in range(agent.goals.shape[0]) if np.any(agent.goals[slice_index])]
 
-print(f"Number of slices with goals: {len(goals_with_targets)}")
+# print(f"Number of slices with goals: {len(goals_with_targets)}")
 
-# Calculate episodes per goal
-episodes_per_goal = episodes // len(goals_with_targets)
-remaining_episodes = episodes % len(goals_with_targets)
+# # Calculate episodes per goal
+# episodes_per_goal = episodes // len(goals_with_targets)
+# remaining_episodes = episodes % len(goals_with_targets)
 
-# Shuffle the order of goals with targets
-np.random.shuffle(goals_with_targets)
+# # Shuffle the order of goals with targets
+# np.random.shuffle(goals_with_targets)
 
-# Training loop for random policy
-for episode in range(episodes):
-    goal_index = goals_with_targets[episode % len(goals_with_targets)]
+# # Training loop for random policy
+# for episode in range(episodes):
+#     goal_index = goals_with_targets[episode % len(goals_with_targets)]
     
-    epsilon = 1  # Set epsilon to 1 for random policy
+#     epsilon = 1  # Set epsilon to 1 for random policy
     
-    # training phase
-    agent_start = random_valid_position(env)
-    goal_pos = env.state_to_point(np.where(random_policy_agent.goals[goal_index] == 1)[0][0])
+#     # training phase
+#     agent_start = random_valid_position(env)
+#     goal_pos = env.state_to_point(np.where(random_policy_agent.goals[goal_index] == 1)[0][0])
 
-    env.reset(agent_pos=agent_start, goal_pos=goal_pos)
-    state = env.observation
-    episodic_error = []
+#     env.reset(agent_pos=agent_start, goal_pos=goal_pos)
+#     state = env.observation
+#     episodic_error = []
 
-    for j in range(train_episode_length):
-        action = random_policy_agent.sample_action(state, epsilon=epsilon)
-        reward = env.step(action)
-        next_state = env.observation
-        done = env.done
-        random_policy_experiences.append([state, action, next_state, reward])
-        experience = [state, action, next_state, reward, done]
+#     for j in range(train_episode_length):
+#         action = random_policy_agent.sample_action(state, epsilon=epsilon)
+#         reward = env.step(action)
+#         next_state = env.observation
+#         done = env.done
+#         random_policy_experiences.append([state, action, next_state, reward])
+#         experience = [state, action, next_state, reward, done]
         
-        td_sr = random_policy_agent.update_sr(experience)
-        td_w = random_policy_agent.update_w(experience)  # This now updates for all goals
-        episodic_error.append(np.mean(np.abs(td_sr)))
+#         td_sr = random_policy_agent.update_sr(experience)
+#         td_w = random_policy_agent.update_w(experience)  # This now updates for all goals
+#         episodic_error.append(np.mean(np.abs(td_sr)))
         
-        state = next_state
-        if done:
-            break
+#         state = next_state
+#         if done:
+#             break
     
-    random_policy_td_errors.append(np.mean(episodic_error))
+#     random_policy_td_errors.append(np.mean(episodic_error))
     
-    # Test phase
-    agent_start = random_valid_position(env)
-    env.reset(agent_pos=agent_start, goal_pos=goal_pos)
-    state = env.observation
-    for j in range(test_episode_length):
-        action = random_policy_agent.sample_action(state, epsilon=test_epsilon)
-        reward = env.step(action)
-        state_next = env.observation
-        random_policy_test_experiences.append([state, action, state_next, reward])
-        state = state_next
-        if env.done:
-            break
-    random_policy_test_lengths.append(j)
+#     # Test phase
+#     agent_start = random_valid_position(env)
+#     env.reset(agent_pos=agent_start, goal_pos=goal_pos)
+#     state = env.observation
+#     for j in range(test_episode_length):
+#         action = random_policy_agent.sample_action(state, epsilon=test_epsilon)
+#         reward = env.step(action)
+#         state_next = env.observation
+#         random_policy_test_experiences.append([state, action, state_next, reward])
+#         state = state_next
+#         if env.done:
+#             break
+#     random_policy_test_lengths.append(j)
 
-print("\nRandom policy training completed.")
+# print("\nRandom policy training completed.")
 
-# After random policy training
-plot_grid_cells(random_policy_agent, env, "Grid Cells (Random Policy)")
-plot_value_functions(random_policy_agent, env, "Value Functions (Random Policy)")
-plot_raw_sr(random_policy_agent.M, env, "SR Matrix Random")
+# # After random policy training
+# plot_grid_cells(random_policy_agent, env, "Grid Cells (Random Policy)")
+# plot_value_functions(random_policy_agent, env, "Value Functions (Random Policy)")
+# plot_raw_sr(random_policy_agent.M, env, "SR Matrix Random")
 
 
 
@@ -477,7 +501,7 @@ plot_raw_sr(random_policy_agent.M, env, "SR Matrix Random")
 epsilon_greedy_agent = TabularSuccessorAgent(env.state_size, env.action_size, lr, gamma, goal_size)
 
 # Filter out slices without goals
-goals_with_targets = [slice_index for slice_index in range(agent.goals.shape[0]) if np.any(agent.goals[slice_index])]
+goals_with_targets = [slice_index for slice_index in range(epsilon_greedy_agent.goals.shape[0]) if np.any(epsilon_greedy_agent.goals[slice_index])]
 
 experiences = []
 test_experiences = []
@@ -497,7 +521,11 @@ if not os.path.exists('videos'):
 
 epsilon = initial_train_epsilon
 
-for episode in range(episodes):
+
+print("plotting goals")
+plot_goal_matrices(epsilon_greedy_agent.goals, env)
+
+for episode in tqdm(range(episodes), "Training for Epsilod-Greedy"):
     goal_index = goals_with_targets[episode % len(goals_with_targets)]
 
     agent_start = random_valid_position(env)
