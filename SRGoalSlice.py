@@ -389,7 +389,7 @@ def get_goal_sequence(total_episodes, goal_size):
 # parameters for training
 train_episode_length = 100
 test_episode_length = 100
-episodes = 1000000
+episodes = 100
 gamma = 0.8
 lr = 0.01
 
@@ -397,7 +397,7 @@ initial_train_epsilon = 0.6
 epsilon_decay = 0.995
 
 test_epsilon = 0.01
-goal_size = 400 # Testing with a goal for every state
+goal_size = 10 # Testing with a goal for every state
 
 # Initialize the agent and environment
 agent = TabularSuccessorAgent(env.state_size, env.action_size, lr, gamma, goal_size)
@@ -485,6 +485,10 @@ for episode in range(episodes):
             break
     random_policy_test_lengths.append(j)
 
+    # Print progress every 50 episodes
+    if (episode + 1) % 50 == 0:
+        print(f"Random policy training: Completed episode {episode + 1}")
+
 print("\nRandom policy training completed.")
 
 # After random policy training
@@ -515,15 +519,15 @@ np.random.shuffle(goals_with_targets)
 episodes_per_goal = episodes // len(goals_with_targets)
 remaining_episodes = episodes % len(goals_with_targets)
 
-# Ensure the videos directory exists
-if not os.path.exists('videos'):
-    os.makedirs('videos')
+# # Ensure the videos directory exists
+# if not os.path.exists('videos'):
+#     os.makedirs('videos')
 
 epsilon = initial_train_epsilon
 
 
-print("plotting goals")
-plot_goal_matrices(epsilon_greedy_agent.goals, env)
+# print("plotting goals")
+# plot_goal_matrices(epsilon_greedy_agent.goals, env)
 
 for episode in range(episodes):
     goal_index = goals_with_targets[episode % len(goals_with_targets)]
@@ -570,6 +574,10 @@ for episode in range(episodes):
         if env.done:
             break
     test_lengths.append(j)
+
+    # Print progress every 50 episodes
+    if (episode + 1) % 50 == 0:
+        print(f"Epsilon-greefy training: Completed episode {episode + 1}")
 
 print("\nEpsilon-greedy training completed.")
 
