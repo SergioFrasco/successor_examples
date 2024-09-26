@@ -12,7 +12,7 @@ import random
 cmap = plt.cm.viridis
 cmap.set_bad(color='white')
 
-grid_size = 15
+grid_size = 20
 pattern = "empty"
 env = SimpleGrid(grid_size, block_pattern=pattern, obs_mode="index")
 env.reset(agent_pos=[0, 0], goal_pos=[0, grid_size - 1])
@@ -405,7 +405,7 @@ initial_train_epsilon = 0.6
 epsilon_decay = 0.995
 
 test_epsilon = 0.01
-goal_size = 225 # Testing with a goal for every state
+goal_size = 400 # Testing with a goal for every state
 
 # Initialize the agent and environment
 agent = TabularSuccessorAgent(env.state_size, env.action_size, lr, gamma, goal_size)
