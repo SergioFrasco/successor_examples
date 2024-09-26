@@ -12,7 +12,7 @@ import random
 cmap = plt.cm.viridis
 cmap.set_bad(color='white')
 
-grid_size = 10
+grid_size = 15
 pattern = "empty"
 env = SimpleGrid(grid_size, block_pattern=pattern, obs_mode="index")
 env.reset(agent_pos=[0, 0], goal_pos=[0, grid_size - 1])
@@ -72,7 +72,12 @@ def record_agent_trajectories(env, agent, episodes, episode_length, epsilon, fil
 # ------------plotting functions-----------
 
 # Function to plot grid cells from the SR matrix
-def plot_grid_cells(agent, env, title):
+import numpy as np
+import matplotlib.pyplot as plt
+import os
+import math
+
+def plot_grid_cells(agent, env, title, num_grid_cells=16):
     # Reshape the SR matrix to be state_size x state_size for eigen decomposition
     sr_matrix = np.mean(agent.M, axis=0)  # Averaging over actions
     
@@ -83,12 +88,14 @@ def plot_grid_cells(agent, env, title):
     idx = np.argsort(-eigenvalues)
     eigenvectors = eigenvectors[:, idx]
     
-    # Plot the first few principal eigenvectors (grid cells)
-    num_grid_cells = 4  # Adjust the number of grid cells to plot
-    plt.figure(figsize=(10, 10))
+    # Calculate the grid layout
+    grid_size = math.ceil(math.sqrt(num_grid_cells))
+    
+    # Plot the specified number of principal eigenvectors (grid cells)
+    plt.figure(figsize=(4 * grid_size, 4 * grid_size))
     
     for i in range(num_grid_cells):
-        plt.subplot(2, 2, i + 1)
+        plt.subplot(grid_size, grid_size, i + 1)
         grid_cell = np.reshape(eigenvectors[:, i], (env.grid_size, env.grid_size))
         plt.imshow(grid_cell, cmap='viridis')
         plt.title(f'Eigenvector {i + 1}')
@@ -96,7 +103,8 @@ def plot_grid_cells(agent, env, title):
     
     plt.suptitle(title)
     plt.tight_layout()
-     # Create a 'plots' directory if it doesn't exist
+    
+    # Create a 'plots' directory if it doesn't exist
     if not os.path.exists('plots'):
         os.makedirs('plots')
     
@@ -397,7 +405,7 @@ initial_train_epsilon = 0.6
 epsilon_decay = 0.995
 
 test_epsilon = 0.01
-goal_size = 100 # Testing with a goal for every state
+goal_size = 225 # Testing with a goal for every state
 
 # Initialize the agent and environment
 agent = TabularSuccessorAgent(env.state_size, env.action_size, lr, gamma, goal_size)
@@ -492,7 +500,8 @@ for episode in range(episodes):
 print("\nRandom policy training completed.")
 
 # After random policy training
-plot_grid_cells(random_policy_agent, env, "Grid Cells (Random Policy)")
+# plot_grid_cells(random_policy_agent, env, "Higher Eigenvectors", num_grid_cells=16)
+plot_grid_cells(random_policy_agent, env, "Grid Cells (Random Policy)", num_grid_cells = 16)
 plot_value_functions(random_policy_agent, env, "Value Functions (Random Policy)")
 plot_raw_sr(random_policy_agent.M, env, "SR Matrix Random")
 
@@ -582,7 +591,8 @@ for episode in range(episodes):
 print("\nEpsilon-greedy training completed.")
 
 # After epsilon-greedy policy training
-plot_grid_cells(epsilon_greedy_agent, env, "Grid Cells (Epsilon-Greedy Policy)")
+
+plot_grid_cells(epsilon_greedy_agent, env, "Grid Cells (Epsilon-Greedy Policy)", num_grid_cells = 16)
 plot_value_functions(epsilon_greedy_agent, env, "Value Functions (Epsilon-Greedy Policy)")
 plot_raw_sr(epsilon_greedy_agent.M, env, "SR Matrix WVF e-Greedy")
 
