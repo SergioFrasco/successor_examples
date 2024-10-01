@@ -12,7 +12,7 @@ import random
 cmap = plt.cm.viridis
 cmap.set_bad(color='white')
 
-grid_size = 20
+grid_size = 7
 pattern = "empty"
 env = SimpleGrid(grid_size, block_pattern=pattern, obs_mode="index")
 env.reset(agent_pos=[0, 0], goal_pos=[0, grid_size - 1])
@@ -237,8 +237,7 @@ def plot_raw_sr(sr, env, experiment_name):
     # Close the plot to free up memory
     plt.close()
 
-# --------------------------Class for the successorAgent-----------------------
-
+# --------------------------Class for Q-learning based Agents-----------------------
 class TabularSuccessorAgent(object):
     def __init__(self, state_size, action_size, learning_rate, gamma, goal_size):
         self.state_size = state_size
@@ -358,6 +357,57 @@ class TabularSuccessorAgent(object):
             wvf[:, goal] = np.max(np.matmul(self.M, goal_reward), axis=0)
         return wvf
 
+# -------------------------- Class for SARSA based agents (Awjuliani) ------------------------
+class SARSATabularSuccessorAgent(object):
+    def __init__(self, state_size, action_size, learning_rate, gamma):
+        self.state_size = state_size
+        self.action_size = action_size
+        self.M = np.stack([np.identity(state_size) for i in range(action_size)])
+        self.w = np.zeros([state_size])
+        self.learning_rate = learning_rate
+        self.gamma = gamma
+        
+    def Q_estimates(self, state, goal=None):
+        # Generate Q values for all actions.
+        if goal == None:
+            goal = self.w
+        else:
+            goal = utils.onehot(goal, self.state_size)
+        return np.matmul(self.M[:,state,:],goal)
+    
+    def sample_action(self, state, goal=None, epsilon=0.0):
+        # Samples action using epsilon-greedy approach
+        if np.random.uniform(0, 1) < epsilon:
+            action = np.random.randint(self.action_size)
+        else:
+            Qs = self.Q_estimates(state, goal)
+            action = np.argmax(Qs)
+        return action
+    
+    def update_w(self, current_exp):
+        # A simple update rule
+        s_1 = current_exp[2]
+        r = current_exp[3]
+        error = r - self.w[s_1]
+        self.w[s_1] += self.learning_rate * error        
+        return error
+    
+    def update_sr(self, current_exp, next_exp):
+        # SARSA TD learning rule
+        s = current_exp[0]
+        s_a = current_exp[1]
+        s_1 = current_exp[2]
+        s_a_1 = next_exp[1]
+        r = current_exp[3]
+        d = current_exp[4]
+        I = utils.onehot(s, env.state_size)
+        if d:            
+            td_error = (I + self.gamma * utils.onehot(s_1, env.state_size) - self.M[s_a, s, :])
+        else:
+            td_error = (I + self.gamma * self.M[s_a_1, s_1, :] - self.M[s_a, s, :])
+        self.M[s_a, s, :] += self.learning_rate * td_error
+        return td_error
+
 # --------------------Supporting Functions---------
 
 # assists with finding positions for random agent initialization.
@@ -393,11 +443,11 @@ def get_goal_sequence(total_episodes, goal_size):
     
     return goal_sequence
 
-# --------------------Training and Testing Parameters --------------------------------
+# --------------------Training and Testing Parameters for Q-learning agents and SARSA agents --------------------------------
 # parameters for training
 train_episode_length = 100
 test_episode_length = 100
-episodes = 200000
+episodes = 2000
 gamma = 0.8
 lr = 0.01
 
@@ -405,9 +455,14 @@ initial_train_epsilon = 0.6
 epsilon_decay = 0.995
 
 test_epsilon = 0.01
-goal_size = 400 # Testing with a goal for every state
+goal_size = 49 # Testing with a goal for every state
 
-# Initialize the agent and environment
+# ---------------------------Intermediate Setup --------------------------------
+
+# Initialize the SARSA agent
+SARSAagent = SARSATabularSuccessorAgent(env.state_size, env.action_size, lr, gamma)
+
+# Initialize the new Q-learning agent and environment
 agent = TabularSuccessorAgent(env.state_size, env.action_size, lr, gamma, goal_size)
 
 # Filter out slices without goals
@@ -424,86 +479,146 @@ goal_order = np.random.permutation(goal_size)
 # Shuffle the order of goals with targets
 np.random.shuffle(goals_with_targets)
 
-# # --------------------Random Policy Training Loop --------------------
-# # This loop trains the agent using a random policy (epsilon = 1)
+#  ---------------------- SARSA Training loop (Awjuliani) ----------------------
+SARSA_experiences = []
+SARSA_test_experiences = []
+SARSA_test_lengths = []
+SARSA_lifetime_td_errors = []
 
-random_policy_experiences = []
-random_policy_test_experiences = []
-random_policy_test_lengths = []
-random_policy_td_errors = []
-
-# Reinitialize the agent
-random_policy_agent = TabularSuccessorAgent(env.state_size, env.action_size, lr, gamma, goal_size)
-
-# Filter out slices without goals
-goals_with_targets = [slice_index for slice_index in range(agent.goals.shape[0]) if np.any(agent.goals[slice_index])]
-
-print(f"Number of slices with goals: {len(goals_with_targets)}")
-
-# Calculate episodes per goal
-episodes_per_goal = episodes // len(goals_with_targets)
-remaining_episodes = episodes % len(goals_with_targets)
-
-# Shuffle the order of goals with targets
-np.random.shuffle(goals_with_targets)
-
-# Training loop for random policy
-for episode in range(episodes):
-    goal_index = goals_with_targets[episode % len(goals_with_targets)]
-    
-    epsilon = 1  # Set epsilon to 1 for random policy
-    
-    # training phase
+for i in range(episodes):
+    # Train phase
+    # agent_start = [0,0]
     agent_start = random_valid_position(env)
-    goal_pos = env.state_to_point(np.where(random_policy_agent.goals[goal_index] == 1)[0][0])
-
+    if i < episodes // 2:
+        goal_pos = [0, grid_size-1]
+    else:
+        if i == episodes // 2:
+            print("\nSwitched reward locations")
+        goal_pos = [grid_size-1,grid_size-1]
     env.reset(agent_pos=agent_start, goal_pos=goal_pos)
     state = env.observation
     episodic_error = []
-
     for j in range(train_episode_length):
-        action = random_policy_agent.sample_action(state, epsilon=epsilon)
+        action = SARSAagent.sample_action(state, epsilon=initial_train_epsilon)
         reward = env.step(action)
-        next_state = env.observation
+        state_next = env.observation
         done = env.done
-        random_policy_experiences.append([state, action, next_state, reward])
-        experience = [state, action, next_state, reward, done]
-        
-        td_sr = random_policy_agent.update_sr(experience)
-        td_w = random_policy_agent.update_w(experience)  # This now updates for all goals
-        episodic_error.append(np.mean(np.abs(td_sr)))
-        
-        state = next_state
-        if done:
+        SARSA_experiences.append([state, action, state_next, reward, done])
+        state = state_next
+        if (j > 1):
+            td_sr = SARSAagent.update_sr(SARSA_experiences[-2], SARSA_experiences[-1])
+            td_w = SARSAagent.update_w(SARSA_experiences[-1])
+            episodic_error.append(np.mean(np.abs(td_sr)))
+        if env.done:
+            td_sr = SARSAagent.update_sr(SARSA_experiences[-1], SARSA_experiences[-1])
+            episodic_error.append(np.mean(np.abs(td_sr)))
             break
-    
-    random_policy_td_errors.append(np.mean(episodic_error))
+    SARSA_lifetime_td_errors.append(np.mean(episodic_error))
     
     # Test phase
-    agent_start = random_valid_position(env)
     env.reset(agent_pos=agent_start, goal_pos=goal_pos)
     state = env.observation
     for j in range(test_episode_length):
-        action = random_policy_agent.sample_action(state, epsilon=test_epsilon)
+        action = agent.sample_action(state, epsilon=test_epsilon)
         reward = env.step(action)
         state_next = env.observation
-        random_policy_test_experiences.append([state, action, state_next, reward])
+        SARSA_test_experiences.append([state, action, state_next, reward])
         state = state_next
         if env.done:
             break
-    random_policy_test_lengths.append(j)
+    SARSA_test_lengths.append(j)
+    
+    if i % 50 == 0:
+        print('\rEpisode {}/{}, TD Error: {}, Test Lengths: {}'
+              .format(i, episodes, np.mean(SARSA_lifetime_td_errors[-50:]), 
+                      np.mean(SARSA_test_lengths[-50:])), end='')
 
-    # Print progress every 50 episodes
-    if (episode + 1) % 50 == 0:
-        print(f"Random policy training: Completed episode {episode + 1}")
+# After SARSA policy training
+plot_grid_cells(SARSAagent, env, "SARSA Grid Cells", num_grid_cells = 16)
+plot_value_functions(SARSAagent, env, "SARSA Value Functions")
+plot_raw_sr(SARSAagent.M, env, "SARSA SR Matrix")
 
-print("\nRandom policy training completed.")
 
-# After random policy training
-# plot_grid_cells(random_policy_agent, env, "Higher Eigenvectors", num_grid_cells=16)
-plot_grid_cells(random_policy_agent, env, "Grid Cells (Random Policy)", num_grid_cells = 16)
-plot_value_functions(random_policy_agent, env, "Value Functions (Random Policy)")
-plot_raw_sr(random_policy_agent.M, env, "SR Matrix Random")
+# #  --------------------Random Policy Training Loop --------------------
+# # This loop trains the agent using a random policy (epsilon = 1)
+
+# random_policy_experiences = []
+# random_policy_test_experiences = []
+# random_policy_test_lengths = []
+# random_policy_td_errors = []
+
+# # Reinitialize the agent
+# random_policy_agent = TabularSuccessorAgent(env.state_size, env.action_size, lr, gamma, goal_size)
+
+# # Filter out slices without goals
+# goals_with_targets = [slice_index for slice_index in range(agent.goals.shape[0]) if np.any(agent.goals[slice_index])]
+
+# print(f"Number of slices with goals: {len(goals_with_targets)}")
+
+# # Calculate episodes per goal
+# episodes_per_goal = episodes // len(goals_with_targets)
+# remaining_episodes = episodes % len(goals_with_targets)
+
+# # Shuffle the order of goals with targets
+# np.random.shuffle(goals_with_targets)
+
+# # Training loop for random policy
+# for episode in range(episodes):
+#     goal_index = goals_with_targets[episode % len(goals_with_targets)]
+    
+#     epsilon = 1  # Set epsilon to 1 for random policy
+    
+#     # training phase
+#     agent_start = random_valid_position(env)
+#     goal_pos = env.state_to_point(np.where(random_policy_agent.goals[goal_index] == 1)[0][0])
+
+#     env.reset(agent_pos=agent_start, goal_pos=goal_pos)
+#     state = env.observation
+#     episodic_error = []
+
+#     for j in range(train_episode_length):
+#         action = random_policy_agent.sample_action(state, epsilon=epsilon)
+#         reward = env.step(action)
+#         next_state = env.observation
+#         done = env.done
+#         random_policy_experiences.append([state, action, next_state, reward])
+#         experience = [state, action, next_state, reward, done]
+        
+#         td_sr = random_policy_agent.update_sr(experience)
+#         td_w = random_policy_agent.update_w(experience)  # This now updates for all goals
+#         episodic_error.append(np.mean(np.abs(td_sr)))
+        
+#         state = next_state
+#         if done:
+#             break
+    
+#     random_policy_td_errors.append(np.mean(episodic_error))
+    
+#     # Test phase
+#     agent_start = random_valid_position(env)
+#     env.reset(agent_pos=agent_start, goal_pos=goal_pos)
+#     state = env.observation
+#     for j in range(test_episode_length):
+#         action = random_policy_agent.sample_action(state, epsilon=test_epsilon)
+#         reward = env.step(action)
+#         state_next = env.observation
+#         random_policy_test_experiences.append([state, action, state_next, reward])
+#         state = state_next
+#         if env.done:
+#             break
+#     random_policy_test_lengths.append(j)
+
+#     # Print progress every 50 episodes
+#     if (episode + 1) % 50 == 0:
+#         print(f"Random policy training: Completed episode {episode + 1}")
+
+# print("\nRandom policy training completed.")
+
+# # After random policy training
+# # plot_grid_cells(random_policy_agent, env, "Higher Eigenvectors", num_grid_cells=16)
+# plot_grid_cells(random_policy_agent, env, "Grid Cells (Random Policy)", num_grid_cells = 16)
+# plot_value_functions(random_policy_agent, env, "Value Functions (Random Policy)")
+# plot_raw_sr(random_policy_agent.M, env, "SR Matrix Random")
 
 
 
@@ -586,15 +701,14 @@ for episode in range(episodes):
 
     # Print progress every 50 episodes
     if (episode + 1) % 50 == 0:
-        print(f"Epsilon-greefy training: Completed episode {episode + 1}")
+        print(f"WVF training: Completed episode {episode + 1}")
 
-print("\nEpsilon-greedy training completed.")
+print("\nWVF training completed.")
 
 # After epsilon-greedy policy training
-
-plot_grid_cells(epsilon_greedy_agent, env, "Grid Cells (Epsilon-Greedy Policy)", num_grid_cells = 16)
-plot_value_functions(epsilon_greedy_agent, env, "Value Functions (Epsilon-Greedy Policy)")
-plot_raw_sr(epsilon_greedy_agent.M, env, "SR Matrix WVF e-Greedy")
+plot_grid_cells(epsilon_greedy_agent, env, "WVF Grid Cells", num_grid_cells = 16)
+plot_value_functions(epsilon_greedy_agent, env, "WVF Value Functions")
+plot_raw_sr(epsilon_greedy_agent.M, env, "WVF SR Matrix")
 
 # # Compare raw SR matrices
 # plt.figure(figsize=(20, 10))
