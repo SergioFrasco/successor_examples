@@ -501,6 +501,7 @@ SARSA_test_experiences = []
 SARSA_test_lengths = []
 SARSA_lifetime_td_errors = []
 
+# For Grid score
 SARSA_rate_map = np.zeros([env.grid_size, env.grid_size])
 
 for i in range(episodes):
@@ -536,8 +537,8 @@ for i in range(episodes):
             break
 
     SARSA_lifetime_td_errors.append(np.mean(episodic_error))
-    # End of episode
     SARSA_rate_map = calculate_rate_map(SARSA_experiences, env)
+    # End of episode
     
     # Test phase
     env.reset(agent_pos=agent_start, goal_pos=goal_pos)
@@ -567,7 +568,7 @@ scorer = GridScorer(nbins)
 sac, grid_props  = scorer.get_scores(SARSA_rate_map)
 
 # SAC
-scorer.plot_sac(sac, title="Spatial Autocorrelogram", score="Grid Score: {}".format(sac))
+scorer.plot_sac(sac, title="SARSA Spatial Autocorrelogram", score="Grid Score: {}".format(sac))
 plt.show()
 
 # Grid-score
@@ -684,6 +685,9 @@ test_experiences = []
 test_lengths = []
 lifetime_td_errors = []
 
+# For grid score calculation
+WVF_rate_map = np.zeros([env.grid_size, env.grid_size])
+
 # Shuffle the order of goals with targets
 np.random.shuffle(goals_with_targets)
 
@@ -718,6 +722,8 @@ for episode in range(episodes):
         done = env.done
         experiences.append([state, action, next_state, reward])
         experience = [state, action, next_state, reward, done]
+
+        WVF_rate_map += env.state_to_grid(state)
         
         td_sr = epsilon_greedy_agent.update_sr(experience)
         td_w = epsilon_greedy_agent.update_w(experience)  # This now updates for all goals
@@ -732,6 +738,8 @@ for episode in range(episodes):
     # Decay epsilon after each episode
     epsilon *= epsilon_decay
     epsilon = max(epsilon, 0.05)  # minimum epsilon value
+
+    WVF_rate_map = calculate_rate_map(experiences, env)
 
     # Test phase
     agent_start = random_valid_position(env)  
@@ -752,6 +760,21 @@ for episode in range(episodes):
         print(f"WVF training: Completed episode {episode + 1}")
 
 print("\nWVF training completed.")
+
+nbins = 50  # value for number of bins
+wvf_scorer = GridScorer(nbins)
+
+# Get grid scores and spatial autocorrelation (SAC)
+sac, grid_props  = wvf_scorer.get_scores(WVF_rate_map)
+
+# SAC
+wvf_scorer.plot_sac(sac, title="WVF Spatial Autocorrelogram", score="Grid Score: {}".format(sac))
+plt.show()
+
+# Grid-score
+grid_score = grid_props['gridscore']
+wvf_scorer.plot_grid_score(sac)
+plt.show()
 
 # After epsilon-greedy policy training
 plot_grid_cells(epsilon_greedy_agent, env, "WVF Grid Cells", num_grid_cells = 16)
