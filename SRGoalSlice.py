@@ -463,7 +463,7 @@ def calculate_rate_map(experiences, env):
 # parameters for training
 train_episode_length = 100
 test_episode_length = 100
-episodes = 2000
+episodes = 1000
 gamma = 0.8
 lr = 0.01
 
@@ -552,20 +552,28 @@ for i in range(episodes):
             break
     SARSA_test_lengths.append(j)
     
-    if i % 50 == 0:
-        print('\rEpisode {}/{}, TD Error: {}, Test Lengths: {}'
-              .format(i, episodes, np.mean(SARSA_lifetime_td_errors[-50:]), 
-                      np.mean(SARSA_test_lengths[-50:])), end='')
+    # if i % 50 == 0:
+    #     print('\rEpisode {}/{}, TD Error: {}, Test Lengths: {}'
+    #           .format(i, episodes, np.mean(SARSA_lifetime_td_errors[-50:]), 
+    #                   np.mean(SARSA_test_lengths[-50:])), end='')
 
 # Calculating the grid score
-
 from metrics import GridScorer
 
 nbins = 50  # value for number of bins
 scorer = GridScorer(nbins)
 
 # Get grid scores and spatial autocorrelation (SAC)
-sac, stGrd = scorer.get_scores(SARSA_rate_map)
+sac, grid_props  = scorer.get_scores(SARSA_rate_map)
+
+# SAC
+scorer.plot_sac(sac, title="Spatial Autocorrelogram", score="Grid Score: {}".format(sac))
+plt.show()
+
+# Grid-score
+grid_score = grid_props['gridscore']
+scorer.plot_grid_score(sac)
+plt.show()
 
 # scorer.plot_sac(sac)
 # scorer.plot_grid_score(stGrd) dont know the plot for this
