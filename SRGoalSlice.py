@@ -443,6 +443,22 @@ def get_goal_sequence(total_episodes, goal_size):
     
     return goal_sequence
 
+def calculate_rate_map(experiences, env):
+    # Initialize an empty grid to store visit frequencies
+    occupancy_grid = np.zeros([env.grid_size, env.grid_size])
+    
+    # Loop over all experiences to count state visits
+    for experience in experiences:
+        occupancy_grid += env.state_to_grid(experience[0])
+    
+    # Normalize to get the rate map (visits per state)
+    rate_map = occupancy_grid / np.max(occupancy_grid)
+    
+    # Mask the grid to ignore blocks (if any)
+    rate_map = utils.mask_grid(rate_map, env.blocks)
+    
+    return rate_map
+
 # --------------------Training and Testing Parameters for Q-learning agents and SARSA agents --------------------------------
 # parameters for training
 train_episode_length = 100
@@ -485,6 +501,8 @@ SARSA_test_experiences = []
 SARSA_test_lengths = []
 SARSA_lifetime_td_errors = []
 
+SARSA_rate_map = np.zeros([env.grid_size, env.grid_size])
+
 for i in range(episodes):
     # Train phase
     # agent_start = [0,0]
@@ -504,6 +522,9 @@ for i in range(episodes):
         state_next = env.observation
         done = env.done
         SARSA_experiences.append([state, action, state_next, reward, done])
+
+        SARSA_rate_map += env.state_to_grid(state)
+
         state = state_next
         if (j > 1):
             td_sr = SARSAagent.update_sr(SARSA_experiences[-2], SARSA_experiences[-1])
@@ -513,7 +534,10 @@ for i in range(episodes):
             td_sr = SARSAagent.update_sr(SARSA_experiences[-1], SARSA_experiences[-1])
             episodic_error.append(np.mean(np.abs(td_sr)))
             break
+
     SARSA_lifetime_td_errors.append(np.mean(episodic_error))
+    # End of episode
+    SARSA_rate_map = calculate_rate_map(SARSA_experiences, env)
     
     # Test phase
     env.reset(agent_pos=agent_start, goal_pos=goal_pos)
@@ -532,6 +556,22 @@ for i in range(episodes):
         print('\rEpisode {}/{}, TD Error: {}, Test Lengths: {}'
               .format(i, episodes, np.mean(SARSA_lifetime_td_errors[-50:]), 
                       np.mean(SARSA_test_lengths[-50:])), end='')
+
+# Calculating the grid score
+
+from metrics import GridScorer
+
+nbins = 50  # value for number of bins
+scorer = GridScorer(nbins)
+
+# Get grid scores and spatial autocorrelation (SAC)
+sac, stGrd = scorer.get_scores(SARSA_rate_map)
+
+# scorer.plot_sac(sac)
+# scorer.plot_grid_score(stGrd) dont know the plot for this
+# Print these values
+# print("Spatial Autocorrelation:", sac)
+# print("Grid Cell Properties:", stGrd)
 
 # After SARSA policy training
 plot_grid_cells(SARSAagent, env, "SARSA Grid Cells", num_grid_cells = 16)
