@@ -6,19 +6,11 @@ from gridworld import SimpleGrid
 from tqdm import tqdm
 import os
 import matplotlib.animation as animation
-from sklearn.decomposition import PCA #For grid cell plotting
+from sklearn.decomposition import PCA 
 import random
-
-cmap = plt.cm.viridis
-cmap.set_bad(color='white')
-
-grid_size = 7
-pattern = "empty"
-env = SimpleGrid(grid_size, block_pattern=pattern, obs_mode="index")
-env.reset(agent_pos=[0, 0], goal_pos=[0, grid_size - 1])
-
-# Plot the arena
-# print("Four Rooms Arena: ")
+import pandas as pd
+# Calculating the grid score
+from metrics import GridScorer
 
 # ------------------ Recording Functions --------------------------------
 def record_agent_trajectories(env, agent, episodes, episode_length, epsilon, filename):
@@ -459,133 +451,118 @@ def calculate_rate_map(experiences, env):
     
     return rate_map
 
-# --------------------Training and Testing Parameters for Q-learning agents and SARSA agents --------------------------------
-# parameters for training
-train_episode_length = 100
-test_episode_length = 100
-episodes = 1000
-gamma = 0.8
-lr = 0.01
 
-initial_train_epsilon = 0.6
-epsilon_decay = 0.995
-
-test_epsilon = 0.01
-goal_size = 49 # Testing with a goal for every state
-
-# ---------------------------Intermediate Setup --------------------------------
-
-# Initialize the SARSA agent
-SARSAagent = SARSATabularSuccessorAgent(env.state_size, env.action_size, lr, gamma)
-
-# Initialize the new Q-learning agent and environment
-agent = TabularSuccessorAgent(env.state_size, env.action_size, lr, gamma, goal_size)
-
-# Filter out slices without goals
-goals_with_targets = [slice_index for slice_index in range(agent.goals.shape[0]) if np.any(agent.goals[slice_index])]
-
-print(f"Number of slices with goals: {len(goals_with_targets)}")
-
-# Calculate episodes per goal
-episodes_per_goal = episodes // len(goals_with_targets)
-remaining_episodes = episodes % len(goals_with_targets)
-
-# Shuffle goal order
-goal_order = np.random.permutation(goal_size)
-# Shuffle the order of goals with targets
-np.random.shuffle(goals_with_targets)
-
-#  ---------------------- SARSA Training loop (Awjuliani) ----------------------
-SARSA_experiences = []
-SARSA_test_experiences = []
-SARSA_test_lengths = []
-SARSA_lifetime_td_errors = []
-
-# For Grid score
-SARSA_rate_map = np.zeros([env.grid_size, env.grid_size])
-
-for i in range(episodes):
-    # Train phase
-    # agent_start = [0,0]
-    agent_start = random_valid_position(env)
-    if i < episodes // 2:
-        goal_pos = [0, grid_size-1]
-    else:
-        if i == episodes // 2:
-            print("\nSwitched reward locations")
-        goal_pos = [grid_size-1,grid_size-1]
-    env.reset(agent_pos=agent_start, goal_pos=goal_pos)
-    state = env.observation
-    episodic_error = []
-    for j in range(train_episode_length):
-        action = SARSAagent.sample_action(state, epsilon=initial_train_epsilon)
-        reward = env.step(action)
-        state_next = env.observation
-        done = env.done
-        SARSA_experiences.append([state, action, state_next, reward, done])
-
-        SARSA_rate_map += env.state_to_grid(state)
-
-        state = state_next
-        if (j > 1):
-            td_sr = SARSAagent.update_sr(SARSA_experiences[-2], SARSA_experiences[-1])
-            td_w = SARSAagent.update_w(SARSA_experiences[-1])
-            episodic_error.append(np.mean(np.abs(td_sr)))
-        if env.done:
-            td_sr = SARSAagent.update_sr(SARSA_experiences[-1], SARSA_experiences[-1])
-            episodic_error.append(np.mean(np.abs(td_sr)))
-            break
-
-    SARSA_lifetime_td_errors.append(np.mean(episodic_error))
-    SARSA_rate_map = calculate_rate_map(SARSA_experiences, env)
-    # End of episode
+def run_sarsa(train_episode_length,test_episode_length,episodes,gamma,lr,initial_train_epsilon,epsilon_decay,test_epsilon,goal_size):
     
-    # Test phase
-    env.reset(agent_pos=agent_start, goal_pos=goal_pos)
-    state = env.observation
-    for j in range(test_episode_length):
-        action = agent.sample_action(state, epsilon=test_epsilon)
-        reward = env.step(action)
-        state_next = env.observation
-        SARSA_test_experiences.append([state, action, state_next, reward])
-        state = state_next
-        if env.done:
-            break
-    SARSA_test_lengths.append(j)
-    
-    # if i % 50 == 0:
-    #     print('\rEpisode {}/{}, TD Error: {}, Test Lengths: {}'
-    #           .format(i, episodes, np.mean(SARSA_lifetime_td_errors[-50:]), 
-    #                   np.mean(SARSA_test_lengths[-50:])), end='')
+    # ---------------------------Intermediate Setup --------------------------------
+    # Initialize the SARSA agent
+    SARSAagent = SARSATabularSuccessorAgent(env.state_size, env.action_size, lr, gamma)
 
-# Calculating the grid score
-from metrics import GridScorer
+    # Initialize the new Q-learning agent and environment
+    agent = TabularSuccessorAgent(env.state_size, env.action_size, lr, gamma, goal_size)
 
-nbins = 50  # value for number of bins
-scorer = GridScorer(nbins)
+    # Filter out slices without goals
+    goals_with_targets = [slice_index for slice_index in range(agent.goals.shape[0]) if np.any(agent.goals[slice_index])]
 
-# Get grid scores and spatial autocorrelation (SAC)
-sac, grid_props  = scorer.get_scores(SARSA_rate_map)
+    print(f"Number of slices with goals: {len(goals_with_targets)}")
 
-# SAC
-scorer.plot_sac(sac, title="SARSA Spatial Autocorrelogram", score="Grid Score: {}".format(sac))
-plt.show()
+    # Calculate episodes per goal
+    episodes_per_goal = episodes // len(goals_with_targets)
+    remaining_episodes = episodes % len(goals_with_targets)
 
-# Grid-score
-grid_score = grid_props['gridscore']
-scorer.plot_grid_score(sac)
-plt.show()
+    # Shuffle goal order
+    goal_order = np.random.permutation(goal_size)
+    # Shuffle the order of goals with targets
+    np.random.shuffle(goals_with_targets)
 
-# scorer.plot_sac(sac)
-# scorer.plot_grid_score(stGrd) dont know the plot for this
-# Print these values
-# print("Spatial Autocorrelation:", sac)
-# print("Grid Cell Properties:", stGrd)
+    #  ---------------------- SARSA Training loop (Awjuliani) ----------------------
+    SARSA_experiences = []
+    SARSA_test_experiences = []
+    SARSA_test_lengths = []
+    SARSA_lifetime_td_errors = []
 
-# After SARSA policy training
-plot_grid_cells(SARSAagent, env, "SARSA Grid Cells", num_grid_cells = 16)
-plot_value_functions(SARSAagent, env, "SARSA Value Functions")
-plot_raw_sr(SARSAagent.M, env, "SARSA SR Matrix")
+    # For Grid score
+    SARSA_rate_map = np.zeros([env.grid_size, env.grid_size])
+
+    for i in range(episodes):
+        # Train phase
+        # agent_start = [0,0]
+        agent_start = random_valid_position(env)
+        
+        if i < episodes // 2:
+            goal_pos = [0, grid_size-1]
+        else:
+            if i == episodes // 2:
+                print("\nSwitched reward locations")
+            goal_pos = [grid_size-1,grid_size-1]
+        env.reset(agent_pos=agent_start, goal_pos=goal_pos)
+        state = env.observation
+        episodic_error = []
+        for j in range(train_episode_length):
+            action = SARSAagent.sample_action(state, epsilon=initial_train_epsilon)
+            reward = env.step(action)
+            state_next = env.observation
+            done = env.done
+            SARSA_experiences.append([state, action, state_next, reward, done])
+
+            SARSA_rate_map += env.state_to_grid(state)
+
+            state = state_next
+            if (j > 1):
+                td_sr = SARSAagent.update_sr(SARSA_experiences[-2], SARSA_experiences[-1])
+                td_w = SARSAagent.update_w(SARSA_experiences[-1])
+                episodic_error.append(np.mean(np.abs(td_sr)))
+            if env.done:
+                td_sr = SARSAagent.update_sr(SARSA_experiences[-1], SARSA_experiences[-1])
+                episodic_error.append(np.mean(np.abs(td_sr)))
+                break
+
+        SARSA_lifetime_td_errors.append(np.mean(episodic_error))
+        SARSA_rate_map = calculate_rate_map(SARSA_experiences, env)
+        # End of episode
+        
+        # Test phase
+        env.reset(agent_pos=agent_start, goal_pos=goal_pos)
+        state = env.observation
+        for j in range(test_episode_length):
+            action = agent.sample_action(state, epsilon=test_epsilon)
+            reward = env.step(action)
+            state_next = env.observation
+            SARSA_test_experiences.append([state, action, state_next, reward])
+            state = state_next
+            if env.done:
+                break
+        SARSA_test_lengths.append(j)
+        
+        nbins = 50  # value for number of bins
+        scorer = GridScorer(nbins)
+
+        # Get grid scores and spatial autocorrelation (SAC)
+        sac, grid_props  = scorer.get_scores(SARSA_rate_map)
+
+        # SAC
+        # scorer.plot_sac(sac, title="SARSA Spatial Autocorrelogram", score="Grid Score: {}".format(sac))
+        # plt.show()
+
+        # Grid-score
+        grid_score = grid_props['gridscore']
+        # scorer.plot_grid_score(sac)
+        # plt.show()
+
+        print("SARSA Grid Score: ", grid_score)
+
+        # scorer.plot_sac(sac)
+        # scorer.plot_grid_score(stGrd) dont know the plot for this
+        # Print these values
+        # print("Spatial Autocorrelation:", sac)
+        # print("Grid Cell Properties:", stGrd)
+
+        # After SARSA policy training
+        plot_grid_cells(SARSAagent, env, "SARSA Grid Cells", num_grid_cells = 16)
+        plot_value_functions(SARSAagent, env, "SARSA Value Functions")
+        plot_raw_sr(SARSAagent.M, env, "SARSA SR Matrix")
+
+        return grid_score
 
 
 # #  --------------------Random Policy Training Loop --------------------
@@ -674,112 +651,187 @@ plot_raw_sr(SARSAagent.M, env, "SARSA SR Matrix")
 # --------------------Epsilon greedy Training Loop --------------------
 # This loop trains the agent using a decaying epsilon greedy policy and trains it on goal slices in the arena.
 
-# Reinitialize the agent to ensure an independent learning process for the second loop
-epsilon_greedy_agent = TabularSuccessorAgent(env.state_size, env.action_size, lr, gamma, goal_size)
+def run_wvf(train_episode_length,test_episode_length,episodes,gamma,lr,initial_train_epsilon,epsilon_decay,test_epsilon,goal_size):
 
-# Filter out slices without goals
-goals_with_targets = [slice_index for slice_index in range(epsilon_greedy_agent.goals.shape[0]) if np.any(epsilon_greedy_agent.goals[slice_index])]
+    # Reinitialize the agent to ensure an independent learning process for the second loop
+    epsilon_greedy_agent = TabularSuccessorAgent(env.state_size, env.action_size, lr, gamma, goal_size)
 
-experiences = []
-test_experiences = []
-test_lengths = []
-lifetime_td_errors = []
+    # Filter out slices without goals
+    goals_with_targets = [slice_index for slice_index in range(epsilon_greedy_agent.goals.shape[0]) if np.any(epsilon_greedy_agent.goals[slice_index])]
 
-# For grid score calculation
-WVF_rate_map = np.zeros([env.grid_size, env.grid_size])
+    experiences = []
+    test_experiences = []
+    test_lengths = []
+    lifetime_td_errors = []
 
-# Shuffle the order of goals with targets
-np.random.shuffle(goals_with_targets)
+    # For grid score calculation
+    WVF_rate_map = np.zeros([env.grid_size, env.grid_size])
 
-# Calculate episodes per goal
-episodes_per_goal = episodes // len(goals_with_targets)
-remaining_episodes = episodes % len(goals_with_targets)
+    # Shuffle the order of goals with targets
+    np.random.shuffle(goals_with_targets)
 
-# # Ensure the videos directory exists
-# if not os.path.exists('videos'):
-#     os.makedirs('videos')
+    # Calculate episodes per goal
+    episodes_per_goal = episodes // len(goals_with_targets)
+    remaining_episodes = episodes % len(goals_with_targets)
 
-epsilon = initial_train_epsilon
+    # # Ensure the videos directory exists
+    # if not os.path.exists('videos'):
+    #     os.makedirs('videos')
+
+    epsilon = initial_train_epsilon
 
 
-# print("plotting goals")
-# plot_goal_matrices(epsilon_greedy_agent.goals, env)
+    # print("plotting goals")
+    # plot_goal_matrices(epsilon_greedy_agent.goals, env)
 
-for episode in range(episodes):
-    goal_index = goals_with_targets[episode % len(goals_with_targets)]
+    for episode in range(episodes):
+        goal_index = goals_with_targets[episode % len(goals_with_targets)]
 
-    agent_start = random_valid_position(env)
-    goal_pos = env.state_to_point(np.where(epsilon_greedy_agent.goals[goal_index] == 1)[0][0])
+        agent_start = random_valid_position(env)
+        goal_pos = env.state_to_point(np.where(epsilon_greedy_agent.goals[goal_index] == 1)[0][0])
 
-    env.reset(agent_pos=agent_start, goal_pos=goal_pos)
-    state = env.observation
-    episodic_error = []
+        env.reset(agent_pos=agent_start, goal_pos=goal_pos)
+        state = env.observation
+        episodic_error = []
 
-    for step in range(train_episode_length):
-        action = epsilon_greedy_agent.sample_action(state, goal=goal_index, epsilon=epsilon)
-        reward = env.step(action)
-        next_state = env.observation
-        done = env.done
-        experiences.append([state, action, next_state, reward])
-        experience = [state, action, next_state, reward, done]
+        for step in range(train_episode_length):
+            action = epsilon_greedy_agent.sample_action(state, goal=goal_index, epsilon=epsilon)
+            reward = env.step(action)
+            next_state = env.observation
+            done = env.done
+            experiences.append([state, action, next_state, reward])
+            experience = [state, action, next_state, reward, done]
 
-        WVF_rate_map += env.state_to_grid(state)
+            WVF_rate_map += env.state_to_grid(state)
+            
+            td_sr = epsilon_greedy_agent.update_sr(experience)
+            td_w = epsilon_greedy_agent.update_w(experience)  # This now updates for all goals
+            episodic_error.append(np.mean(np.abs(td_sr)))
+            
+            state = next_state
+            if done:
+                break
         
-        td_sr = epsilon_greedy_agent.update_sr(experience)
-        td_w = epsilon_greedy_agent.update_w(experience)  # This now updates for all goals
-        episodic_error.append(np.mean(np.abs(td_sr)))
-        
-        state = next_state
-        if done:
-            break
+        lifetime_td_errors.append(np.mean(episodic_error))
+
+        # Decay epsilon after each episode
+        epsilon *= epsilon_decay
+        epsilon = max(epsilon, 0.05)  # minimum epsilon value
+
+        WVF_rate_map = calculate_rate_map(experiences, env)
+
+        # Test phase
+        agent_start = random_valid_position(env)  
+        env.reset(agent_pos=agent_start, goal_pos=goal_pos)
+        state = env.observation
+        for j in range(test_episode_length):
+            action = epsilon_greedy_agent.sample_action(state, epsilon=test_epsilon)
+            reward = env.step(action)
+            state_next = env.observation
+            test_experiences.append([state, action, state_next, reward])
+            state = state_next
+            if env.done:
+                break
+        test_lengths.append(j)
+
+    #     # Print progress every 50 episodes
+    #     if (episode + 1) % 50 == 0:
+    #         print(f"WVF training: Completed episode {episode + 1}")
+
+    # print("\nWVF training completed.")
     
-    lifetime_td_errors.append(np.mean(episodic_error))
+    nbins = 50  # value for number of bins
+    wvf_scorer = GridScorer(nbins)
 
-    # Decay epsilon after each episode
-    epsilon *= epsilon_decay
-    epsilon = max(epsilon, 0.05)  # minimum epsilon value
+    # Get grid scores and spatial autocorrelation (SAC)
+    sac, grid_props  = wvf_scorer.get_scores(WVF_rate_map)
 
-    WVF_rate_map = calculate_rate_map(experiences, env)
+    # SAC
+    # wvf_scorer.plot_sac(sac, title="WVF Spatial Autocorrelogram", score="Grid Score: {}".format(sac))
+    # plt.show()
 
-    # Test phase
-    agent_start = random_valid_position(env)  
-    env.reset(agent_pos=agent_start, goal_pos=goal_pos)
-    state = env.observation
-    for j in range(test_episode_length):
-        action = epsilon_greedy_agent.sample_action(state, epsilon=test_epsilon)
-        reward = env.step(action)
-        state_next = env.observation
-        test_experiences.append([state, action, state_next, reward])
-        state = state_next
-        if env.done:
-            break
-    test_lengths.append(j)
+    # Grid-score
+    grid_score = grid_props['gridscore']
+    # wvf_scorer.plot_grid_score(sac)
+    # plt.show()
 
-    # Print progress every 50 episodes
-    if (episode + 1) % 50 == 0:
-        print(f"WVF training: Completed episode {episode + 1}")
+    print("WVF Grid Score: ", grid_score)
 
-print("\nWVF training completed.")
+    # After epsilon-greedy policy training
+    plot_grid_cells(epsilon_greedy_agent, env, "WVF Grid Cells", num_grid_cells = 16)
+    plot_value_functions(epsilon_greedy_agent, env, "WVF Value Functions")
+    plot_raw_sr(epsilon_greedy_agent.M, env, "WVF SR Matrix")
 
-nbins = 50  # value for number of bins
-wvf_scorer = GridScorer(nbins)
+    return grid_score
 
-# Get grid scores and spatial autocorrelation (SAC)
-sac, grid_props  = wvf_scorer.get_scores(WVF_rate_map)
+# The Main experiment that compares the grid score from traditional SARSA against the new WVF Method
+def experiment_sarsa_wvf(train_episode_length,test_episode_length,episodes,gamma,lr,initial_train_epsilon,epsilon_decay,test_epsilon):
+    
+    # number of exepriments = goal slices size
+    # The list that containt the number of goal sizes
+    goal_sizes = [49, 39, 29, 19, 9]  # Example goal sizes (can be changed)
 
-# SAC
-wvf_scorer.plot_sac(sac, title="WVF Spatial Autocorrelogram", score="Grid Score: {}".format(sac))
-plt.show()
+    # Initialize empty lists to store results
+    results = []
 
-# Grid-score
-grid_score = grid_props['gridscore']
-wvf_scorer.plot_grid_score(sac)
-plt.show()
+    # # Run SARSA experiments
+    # for run in range(num_runs):
+    #     sarsa_grid_scores = run_sarsa(train_episode_length,test_episode_length,episodes,gamma,lr,initial_train_epsilon,epsilon_decay,test_epsilon, goal_size=goal_sizes[0])
+    #     sarsa_results.append(sarsa_grid_scores)
+    # run SARSA with decreasing goal sizes (no effect)
 
-# After epsilon-greedy policy training
-plot_grid_cells(epsilon_greedy_agent, env, "WVF Grid Cells", num_grid_cells = 16)
-plot_value_functions(epsilon_greedy_agent, env, "WVF Value Functions")
-plot_raw_sr(epsilon_greedy_agent.M, env, "WVF SR Matrix")
+
+    # Run SARSA and WVF with decreasing goal sizes and store results together
+    for goal_size in goal_sizes:
+        sarsa_grid_score = run_sarsa(train_episode_length, test_episode_length, episodes, gamma, lr, initial_train_epsilon, epsilon_decay, test_epsilon, goal_size)
+        wvf_grid_score = run_wvf(train_episode_length, test_episode_length, episodes, gamma, lr, initial_train_epsilon, epsilon_decay, test_epsilon, goal_size)
+        
+        # Append the goal size, SARSA score, and WVF score to combined_results
+        results.append([goal_size, sarsa_grid_score, wvf_grid_score])
+
+    # Store the results in a single CSV file
+    combined_df = pd.DataFrame(results, columns=['Goal Size', 'SARSA Grid Score', 'WVF Grid Score'])
+
+    # Save to a single CSV
+    combined_df.to_csv('sarsa_wvf_grid_scores.csv', index=False)
+
+    print("Results saved to CSV.")
+
+
+# --------------------Environment setup --------------------
+cmap = plt.cm.viridis
+cmap.set_bad(color='white')
+
+grid_size = 7
+pattern = "empty"
+env = SimpleGrid(grid_size, block_pattern=pattern, obs_mode="index")
+env.reset(agent_pos=[0, 0], goal_pos=[0, grid_size - 1])
+# Plot the arena
+# print("Four Rooms Arena: ")
+
+
+# --------------------Training and Testing Parameters for Q-learning agents and SARSA agents --------------------------------
+# parameters for training
+
+# number of steps agent takes in envirnoment
+train_episode_length = 100
+test_episode_length = 100
+
+# number of episodes per experiment
+episodes = 1000
+
+# parameters for agent
+gamma = 0.8
+lr = 0.01
+initial_train_epsilon = 0.6
+epsilon_decay = 0.995
+test_epsilon = 0.01
+
+
+experiment_sarsa_wvf(train_episode_length,test_episode_length,episodes,gamma,lr,initial_train_epsilon,epsilon_decay,test_epsilon)
+
+
+
 
 # # Compare raw SR matrices
 # plt.figure(figsize=(20, 10))
