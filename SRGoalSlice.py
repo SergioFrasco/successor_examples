@@ -436,24 +436,15 @@ def get_goal_sequence(total_episodes, goal_size):
     return goal_sequence
 
 def calculate_rate_map(experiences, env):
-    # Initialize an empty grid to store visit frequencies
     occupancy_grid = np.zeros([env.grid_size, env.grid_size])
-    
-    # Loop over all experiences to count state visits
     for experience in experiences:
-        occupancy_grid += env.state_to_grid(experience[0])
-    
-    # Normalize to get the rate map (visits per state)
-    rate_map = occupancy_grid / np.max(occupancy_grid)
-    
-    # Mask the grid to ignore blocks (if any)
-    rate_map = utils.mask_grid(rate_map, env.blocks)
-    
-    return rate_map
+        occupancy_grid[tuple(env.state_to_point(experience[0]))] += 1
+    rate_map = occupancy_grid / (np.sum(occupancy_grid) + 1e-10)  # Add small epsilon to avoid division by zero
+    return utils.mask_grid(rate_map, env.blocks)
 
 
 def run_sarsa(train_episode_length,test_episode_length,episodes,gamma,lr,initial_train_epsilon,epsilon_decay,test_epsilon,goal_size):
-    
+
     # ---------------------------Intermediate Setup --------------------------------
     # Initialize the SARSA agent
     SARSAagent = SARSATabularSuccessorAgent(env.state_size, env.action_size, lr, gamma)
@@ -534,35 +525,35 @@ def run_sarsa(train_episode_length,test_episode_length,episodes,gamma,lr,initial
                 break
         SARSA_test_lengths.append(j)
         
-        nbins = 50  # value for number of bins
-        scorer = GridScorer(nbins)
+    nbins = 50  # value for number of bins
+    scorer = GridScorer(nbins)
 
-        # Get grid scores and spatial autocorrelation (SAC)
-        sac, grid_props  = scorer.get_scores(SARSA_rate_map)
+    # Get grid scores and spatial autocorrelation (SAC)
+    sac, grid_props  = scorer.get_scores(SARSA_rate_map)
 
-        # SAC
-        # scorer.plot_sac(sac, title="SARSA Spatial Autocorrelogram", score="Grid Score: {}".format(sac))
-        # plt.show()
+    # SAC
+    # scorer.plot_sac(sac, title="SARSA Spatial Autocorrelogram", score="Grid Score: {}".format(sac))
+    # plt.show()
 
-        # Grid-score
-        grid_score = grid_props['gridscore']
-        # scorer.plot_grid_score(sac)
-        # plt.show()
+    # Grid-score
+    grid_score = grid_props['gridscore']
+    # scorer.plot_grid_score(sac)
+    # plt.show()
 
-        print("SARSA Grid Score: ", grid_score)
+    print("SARSA Grid Score: ", grid_score)
 
-        # scorer.plot_sac(sac)
-        # scorer.plot_grid_score(stGrd) dont know the plot for this
-        # Print these values
-        # print("Spatial Autocorrelation:", sac)
-        # print("Grid Cell Properties:", stGrd)
+    # scorer.plot_sac(sac)
+    # scorer.plot_grid_score(stGrd) dont know the plot for this
+    # Print these values
+    # print("Spatial Autocorrelation:", sac)
+    # print("Grid Cell Properties:", stGrd)
 
-        # After SARSA policy training
-        plot_grid_cells(SARSAagent, env, "SARSA Grid Cells", num_grid_cells = 16)
-        plot_value_functions(SARSAagent, env, "SARSA Value Functions")
-        plot_raw_sr(SARSAagent.M, env, "SARSA SR Matrix")
+    # After SARSA policy training
+    plot_grid_cells(SARSAagent, env, "SARSA Grid Cells", num_grid_cells = 16)
+    plot_value_functions(SARSAagent, env, "SARSA Value Functions")
+    plot_raw_sr(SARSAagent.M, env, "SARSA SR Matrix")
 
-        return grid_score
+    return grid_score
 
 
 # #  --------------------Random Policy Training Loop --------------------
