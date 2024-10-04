@@ -167,7 +167,7 @@ def plot_wvf(agent, env):
             ax.imshow(utils.mask_grid(value_map, env.blocks), cmap='viridis')
             ax.set_title(f'Goal: {goal}')
     plt.tight_layout()
-    plt.show()
+    # plt.show()
 
 # Plotting the reward matrix slices for easy viewing
 def plot_goal_matrices(goals, env):
@@ -183,7 +183,7 @@ def plot_goal_matrices(goals, env):
         ax.axis('on')
 
     plt.tight_layout()
-    plt.show()
+    # plt.show()
 
 
 # Use the experiences to show where the agent was the most
@@ -195,7 +195,7 @@ def print_occupancy(experiences, env):
     occupancy_grid = utils.mask_grid(occupancy_grid, env.blocks)
     plt.imshow(occupancy_grid, cmap='viridis')
     plt.colorbar()
-    plt.show()
+    # plt.show()
 
 def plot_srs(action, M, env):
     M = np.reshape(M, [env.action_size, env.state_size, env.grid_size, env.grid_size])
@@ -206,7 +206,7 @@ def plot_srs(action, M, env):
             ax = plt.subplot(env.grid_size, env.grid_size, i + 1)
             ax.imshow(utils.mask_grid(M[action, i, :, :], env.blocks), cmap='viridis')
     plt.tight_layout()
-    plt.show()
+    # plt.show()
 
 # plotting the raw SR matrix
 def plot_raw_sr(sr, env, experiment_name):
@@ -284,7 +284,7 @@ class TabularSuccessorAgent(object):
         for slice_index in range(self.goal_size):
             x, y = available_positions[slice_index]
             self.goals[slice_index, x, y] = 1
-            print(f"Slice {slice_index}: Position ({x}, {y}) set as goal")
+            # print(f"Slice {slice_index}: Position ({x}, {y}) set as goal")
         
         return self.goals
 
@@ -484,7 +484,7 @@ def run_sarsa(train_episode_length,test_episode_length,episodes,gamma,lr,initial
             goal_pos = [0, grid_size-1]
         else:
             if i == episodes // 2:
-                print("\nSwitched reward locations")
+                print("\n Half way through SARSA, Switched reward locations")
             goal_pos = [grid_size-1,grid_size-1]
         env.reset(agent_pos=agent_start, goal_pos=goal_pos)
         state = env.observation
@@ -772,15 +772,16 @@ def experiment_sarsa_wvf(train_episode_length,test_episode_length,episodes,gamma
     # run SARSA with decreasing goal sizes (no effect)
 
 
-    # Run SARSA and WVF with decreasing goal sizes and store results together
+    # run SARSA and WVF with decreasing goal sizes and store results together
     for goal_size in goal_sizes:
+        print("\nExperiment for goal size: ", goal_size)
         sarsa_grid_score = run_sarsa(train_episode_length, test_episode_length, episodes, gamma, lr, initial_train_epsilon, epsilon_decay, test_epsilon, goal_size)
         wvf_grid_score = run_wvf(train_episode_length, test_episode_length, episodes, gamma, lr, initial_train_epsilon, epsilon_decay, test_epsilon, goal_size)
         
-        # Append the goal size, SARSA score, and WVF score to combined_results
+        # append the goal size, SARSA score, and WVF score to combined_results
         results.append([goal_size, sarsa_grid_score, wvf_grid_score])
 
-    # Store the results in a single CSV file
+    # dtore the results in a single CSV file
     combined_df = pd.DataFrame(results, columns=['Goal Size', 'SARSA Grid Score', 'WVF Grid Score'])
 
     # Save to a single CSV
@@ -805,24 +806,23 @@ env.reset(agent_pos=[0, 0], goal_pos=[0, grid_size - 1])
 # parameters for training
 
 # number of steps agent takes in envirnoment
-train_episode_length = 100
-test_episode_length = 100
+train_episode_length = 1000
+test_episode_length = 1000
 
 # number of episodes per experiment
-episodes = 50000
+episodes = 5000
 
 # parameters for agent
-gamma = 0.8
-lr = 0.01
-initial_train_epsilon = 0.6
+# try 0.9
+gamma = 0.9
+# 0.01
+lr = 1
+# 0.6
+initial_train_epsilon = 1
 epsilon_decay = 0.995
 test_epsilon = 0.01
 
-
 experiment_sarsa_wvf(train_episode_length,test_episode_length,episodes,gamma,lr,initial_train_epsilon,epsilon_decay,test_epsilon)
-
-
-
 
 # # Compare raw SR matrices
 # plt.figure(figsize=(20, 10))
