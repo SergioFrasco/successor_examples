@@ -483,8 +483,8 @@ def run_sarsa(train_episode_length,test_episode_length,episodes,gamma,lr,initial
         if i < episodes // 2:
             goal_pos = [0, grid_size-1]
         else:
-            if i == episodes // 2:
-                print("\n Half way through SARSA, Switched reward locations")
+            # if i == episodes // 2:
+            #     print("\n Half way through SARSA, Switched reward locations")
             goal_pos = [grid_size-1,grid_size-1]
         env.reset(agent_pos=agent_start, goal_pos=goal_pos)
         state = env.observation
@@ -532,13 +532,15 @@ def run_sarsa(train_episode_length,test_episode_length,episodes,gamma,lr,initial
     sac, grid_props  = scorer.get_scores(SARSA_rate_map)
 
     # SAC
-    # scorer.plot_sac(sac, title="SARSA Spatial Autocorrelogram", score="Grid Score: {}".format(sac))
+    scorer.plot_sac(sac, title="SARSA Spatial Autocorrelogram", score="Grid Score: {}".format(sac))
     # plt.show()
+    plt.savefig('plots/SARSA Spatial Auto Correlation.png')
 
     # Grid-score
     grid_score = grid_props['gridscore']
-    # scorer.plot_grid_score(sac)
+    scorer.plot_grid_score(sac)
     # plt.show()
+    plt.savefig('plots/SARSA Grid Score.png')
 
     print("SARSA Grid Score: ", grid_score)
 
@@ -738,13 +740,15 @@ def run_wvf(train_episode_length,test_episode_length,episodes,gamma,lr,initial_t
     sac, grid_props  = wvf_scorer.get_scores(WVF_rate_map)
 
     # SAC
-    # wvf_scorer.plot_sac(sac, title="WVF Spatial Autocorrelogram", score="Grid Score: {}".format(sac))
+    wvf_scorer.plot_sac(sac, title="WVF Spatial Autocorrelogram", score="Grid Score: {}".format(sac))
     # plt.show()
+    plt.savefig('plots/WVF Spatial Auto Correlation.png')
 
     # Grid-score
     grid_score = grid_props['gridscore']
-    # wvf_scorer.plot_grid_score(sac)
+    wvf_scorer.plot_grid_score(sac)
     # plt.show()
+    plt.savefig('plots/WVF Grid Score.png')
 
     print("WVF Grid Score: ", grid_score)
 
@@ -813,7 +817,7 @@ test_episode_length = 1000
 episodes = 5000
 
 # parameters for agent
-# try 0.9
+# 0.8
 gamma = 0.9
 # 0.01
 lr = 1
