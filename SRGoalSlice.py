@@ -475,7 +475,7 @@ def run_sarsa(train_episode_length,test_episode_length,episodes,gamma,lr,initial
     # For Grid score
     SARSA_rate_map = np.zeros([env.grid_size, env.grid_size])
 
-    for i in range(episodes):
+    for i in tqdm(range(episodes), desc = "Training SARSA"):
         # Train phase
         # agent_start = [0,0]
         agent_start = random_valid_position(env)
@@ -513,17 +513,17 @@ def run_sarsa(train_episode_length,test_episode_length,episodes,gamma,lr,initial
         # End of episode
         
         # Test phase
-        env.reset(agent_pos=agent_start, goal_pos=goal_pos)
-        state = env.observation
-        for j in range(test_episode_length):
-            action = agent.sample_action(state, epsilon=test_epsilon)
-            reward = env.step(action)
-            state_next = env.observation
-            SARSA_test_experiences.append([state, action, state_next, reward])
-            state = state_next
-            if env.done:
-                break
-        SARSA_test_lengths.append(j)
+        # env.reset(agent_pos=agent_start, goal_pos=goal_pos)
+        # state = env.observation
+        # for j in range(test_episode_length):
+        #     action = agent.sample_action(state, epsilon=test_epsilon)
+        #     reward = env.step(action)
+        #     state_next = env.observation
+        #     SARSA_test_experiences.append([state, action, state_next, reward])
+        #     state = state_next
+        #     if env.done:
+        #         break
+        # SARSA_test_lengths.append(j)
         
     nbins = 50  # value for number of bins
     scorer = GridScorer(nbins)
@@ -677,7 +677,7 @@ def run_wvf(train_episode_length,test_episode_length,episodes,gamma,lr,initial_t
     # print("plotting goals")
     # plot_goal_matrices(epsilon_greedy_agent.goals, env)
 
-    for episode in range(episodes):
+    for episode in tqdm(range(episodes), desc = "Training WVF"):
         goal_index = goals_with_targets[episode % len(goals_with_targets)]
 
         agent_start = random_valid_position(env)
@@ -714,18 +714,18 @@ def run_wvf(train_episode_length,test_episode_length,episodes,gamma,lr,initial_t
         WVF_rate_map = calculate_rate_map(experiences, env)
 
         # Test phase
-        agent_start = random_valid_position(env)  
-        env.reset(agent_pos=agent_start, goal_pos=goal_pos)
-        state = env.observation
-        for j in range(test_episode_length):
-            action = epsilon_greedy_agent.sample_action(state, epsilon=test_epsilon)
-            reward = env.step(action)
-            state_next = env.observation
-            test_experiences.append([state, action, state_next, reward])
-            state = state_next
-            if env.done:
-                break
-        test_lengths.append(j)
+        # agent_start = random_valid_position(env)  
+        # env.reset(agent_pos=agent_start, goal_pos=goal_pos)
+        # state = env.observation
+        # for j in range(test_episode_length):
+        #     action = epsilon_greedy_agent.sample_action(state, epsilon=test_epsilon)
+        #     reward = env.step(action)
+        #     state_next = env.observation
+        #     test_experiences.append([state, action, state_next, reward])
+        #     state = state_next
+        #     if env.done:
+        #         break
+        # test_lengths.append(j)
 
     #     # Print progress every 50 episodes
     #     if (episode + 1) % 50 == 0:
@@ -810,11 +810,11 @@ env.reset(agent_pos=[0, 0], goal_pos=[0, grid_size - 1])
 # parameters for training
 
 # number of steps agent takes in envirnoment
-train_episode_length = 1000
-test_episode_length = 1000
+train_episode_length = 200
+test_episode_length = 200
 
 # number of episodes per experiment
-episodes = 5000
+episodes = 2000
 
 # parameters for agent
 # 0.8
