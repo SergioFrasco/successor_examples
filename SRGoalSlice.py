@@ -835,15 +835,15 @@ train_episode_length = 500
 test_episode_length = 500
 
 # number of episodes per experiment
-episodes = 5000
+episodes = 10000
 
 # parameters for agent
-# 0.8
-gamma = 0.95
-# 0.01
-lr = 1
-# 0.6
-initial_train_epsilon = 1
+gamme = 0.8
+# gamma = 0.95
+lr = 0.01
+# lr = 1
+initial_train_epsilon = 0.6
+# initial_train_epsilon = 1
 epsilon_decay = 0.995
 test_epsilon = 0.01
 
