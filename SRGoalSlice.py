@@ -537,7 +537,7 @@ def run_sarsa(train_episode_length,test_episode_length,episodes,gamma,lr,initial
         #         break
         # SARSA_test_lengths.append(j)
         
-    nbins = 7  # value for number of bins
+    nbins = grid_size  # value for number of bins
     scorer = GridScorer(nbins)
 
     # Get grid scores and spatial autocorrelation (SAC)
@@ -751,7 +751,7 @@ def run_wvf(train_episode_length,test_episode_length,episodes,gamma,lr,initial_t
 
     # print("\nWVF training completed.")
     
-    nbins = 7  # value for number of bins
+    nbins = grid_size  # value for number of bins
     wvf_scorer = GridScorer(nbins)
 
     # Get grid scores and spatial autocorrelation (SAC)
@@ -785,7 +785,7 @@ def experiment_sarsa_wvf(train_episode_length,test_episode_length,episodes,gamma
     
     # number of exepriments = goal slices size
     # The list that containt the number of goal sizes
-    goal_sizes = [15, 20, 25, 30, 35, 40, 45, 49]  # Example goal sizes (can be changed)
+    goal_sizes = [50, 75, 100, 125, 150, 175, 200, 225]  # Example goal sizes (can be changed)
 
     # Initialize empty lists to store results
     results = []
@@ -819,7 +819,7 @@ def experiment_sarsa_wvf(train_episode_length,test_episode_length,episodes,gamma
 cmap = plt.cm.viridis
 cmap.set_bad(color='white')
 
-grid_size = 7
+grid_size = 15
 pattern = "empty"
 env = SimpleGrid(grid_size, block_pattern=pattern, obs_mode="index")
 env.reset(agent_pos=[0, 0], goal_pos=[0, grid_size - 1])
@@ -835,13 +835,14 @@ train_episode_length = 500
 test_episode_length = 500
 
 # number of episodes per experiment
-episodes = 10000
+episodes = 50000
 
 # parameters for agent
-gamme = 0.8
+gamma = 0.8
 # gamma = 0.95
-lr = 0.01
-# lr = 1
+lr = 0.5
+# lr = 0.1 grid cells
+# lr = 1 gerauds
 initial_train_epsilon = 0.6
 # initial_train_epsilon = 1
 epsilon_decay = 0.995
