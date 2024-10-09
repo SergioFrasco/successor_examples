@@ -439,8 +439,19 @@ def calculate_rate_map(experiences, env):
     occupancy_grid = np.zeros([env.grid_size, env.grid_size])
     for experience in experiences:
         occupancy_grid[tuple(env.state_to_point(experience[0]))] += 1
-    rate_map = occupancy_grid / (np.sum(occupancy_grid) + 1e-10)  # Add small epsilon to avoid division by zero
+    rate_map = occupancy_grid + 1e-10 / (np.sum(occupancy_grid) + 1e-10)  # Add small epsilon to avoid division by zero
     return utils.mask_grid(rate_map, env.blocks)
+
+# def calculate_rate_map(experiences, env):
+#     occupancy_grid = np.zeros([env.grid_size, env.grid_size])
+#     for experience in experiences:
+#         occupancy_grid[tuple(env.state_to_point(experience[0]))] += 1
+#     total_occupancy = np.sum(occupancy_grid)
+#     if total_occupancy > 0:
+#         rate_map = occupancy_grid / total_occupancy
+#     else:
+#         rate_map = np.zeros_like(occupancy_grid)  # or handle this case as appropriate
+#     return utils.mask_grid(rate_map, env.blocks)
 
 
 def run_sarsa(train_episode_length,test_episode_length,episodes,gamma,lr,initial_train_epsilon,epsilon_decay,test_epsilon,goal_size):
@@ -477,8 +488,8 @@ def run_sarsa(train_episode_length,test_episode_length,episodes,gamma,lr,initial
 
     for i in tqdm(range(episodes), desc = "Training SARSA"):
         # Train phase
-        # agent_start = [0,0]
-        agent_start = random_valid_position(env)
+        agent_start = [0,0]
+        # agent_start = random_valid_position(env)
         
         if i < episodes // 2:
             goal_pos = [0, grid_size-1]
@@ -509,7 +520,8 @@ def run_sarsa(train_episode_length,test_episode_length,episodes,gamma,lr,initial
                 break
 
         SARSA_lifetime_td_errors.append(np.mean(episodic_error))
-        SARSA_rate_map = calculate_rate_map(SARSA_experiences, env)
+
+    SARSA_rate_map = calculate_rate_map(SARSA_experiences, env)
         # End of episode
         
         # Test phase
@@ -525,24 +537,30 @@ def run_sarsa(train_episode_length,test_episode_length,episodes,gamma,lr,initial
         #         break
         # SARSA_test_lengths.append(j)
         
-    nbins = 50  # value for number of bins
+    nbins = 7  # value for number of bins
     scorer = GridScorer(nbins)
 
     # Get grid scores and spatial autocorrelation (SAC)
     sac, grid_props  = scorer.get_scores(SARSA_rate_map)
+
+    score = scorer.plot_grid_score(sac)
+    grid_score = str(np.around(score[1]["gridscore"], decimals=4, out=None))
+    # plt.show()
+    plt.savefig('plots/SARSA Grid Score.png')
+    
+    # Grid-score
+    # grid_score = grid_props['gridscore']
+    print("SARSA Grid Score: ", grid_score)
 
     # SAC
     scorer.plot_sac(sac, title="SARSA Spatial Autocorrelogram", score="Grid Score: {}".format(sac))
     # plt.show()
     plt.savefig('plots/SARSA Spatial Auto Correlation.png')
 
-    # Grid-score
-    grid_score = grid_props['gridscore']
-    scorer.plot_grid_score(sac)
-    # plt.show()
-    plt.savefig('plots/SARSA Grid Score.png')
+    
+    
 
-    print("SARSA Grid Score: ", grid_score)
+   
 
     # scorer.plot_sac(sac)
     # scorer.plot_grid_score(stGrd) dont know the plot for this
@@ -711,7 +729,7 @@ def run_wvf(train_episode_length,test_episode_length,episodes,gamma,lr,initial_t
         epsilon *= epsilon_decay
         epsilon = max(epsilon, 0.05)  # minimum epsilon value
 
-        WVF_rate_map = calculate_rate_map(experiences, env)
+    WVF_rate_map = calculate_rate_map(experiences, env)
 
         # Test phase
         # agent_start = random_valid_position(env)  
@@ -733,22 +751,25 @@ def run_wvf(train_episode_length,test_episode_length,episodes,gamma,lr,initial_t
 
     # print("\nWVF training completed.")
     
-    nbins = 50  # value for number of bins
+    nbins = 7  # value for number of bins
     wvf_scorer = GridScorer(nbins)
 
     # Get grid scores and spatial autocorrelation (SAC)
     sac, grid_props  = wvf_scorer.get_scores(WVF_rate_map)
 
+    score = wvf_scorer.plot_grid_score(sac)
+    grid_score = str(np.around(score[1]["gridscore"], decimals=4, out=None))
+    plt.savefig('plots/WVF Grid Score.png')
     # SAC
     wvf_scorer.plot_sac(sac, title="WVF Spatial Autocorrelogram", score="Grid Score: {}".format(sac))
     # plt.show()
     plt.savefig('plots/WVF Spatial Auto Correlation.png')
 
     # Grid-score
-    grid_score = grid_props['gridscore']
-    wvf_scorer.plot_grid_score(sac)
+    # grid_score = grid_props['gridscore']
+    
     # plt.show()
-    plt.savefig('plots/WVF Grid Score.png')
+    
 
     print("WVF Grid Score: ", grid_score)
 
@@ -764,7 +785,7 @@ def experiment_sarsa_wvf(train_episode_length,test_episode_length,episodes,gamma
     
     # number of exepriments = goal slices size
     # The list that containt the number of goal sizes
-    goal_sizes = [30, 35, 40, 45, 49]  # Example goal sizes (can be changed)
+    goal_sizes = [15, 20, 25, 30, 35, 40, 45, 49]  # Example goal sizes (can be changed)
 
     # Initialize empty lists to store results
     results = []
@@ -810,15 +831,15 @@ env.reset(agent_pos=[0, 0], goal_pos=[0, grid_size - 1])
 # parameters for training
 
 # number of steps agent takes in envirnoment
-train_episode_length = 200
-test_episode_length = 200
+train_episode_length = 500
+test_episode_length = 500
 
 # number of episodes per experiment
-episodes = 2000
+episodes = 5000
 
 # parameters for agent
 # 0.8
-gamma = 0.9
+gamma = 0.95
 # 0.01
 lr = 1
 # 0.6
