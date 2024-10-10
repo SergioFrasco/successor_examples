@@ -785,7 +785,7 @@ def experiment_sarsa_wvf(train_episode_length,test_episode_length,episodes,gamma
     
     # number of exepriments = goal slices size
     # The list that containt the number of goal sizes
-    goal_sizes = [50, 60, 70, 80, 90, 100]  # Example goal sizes (can be changed)
+    goal_sizes = [50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100]  # Example goal sizes (can be changed)
 
     # Initialize empty lists to store results
     results = []
@@ -835,7 +835,7 @@ train_episode_length = 500
 test_episode_length = 500
 
 # number of episodes per experiment
-episodes = 7000
+episodes = 8000
 
 # parameters for agent
 gamma = 0.8
