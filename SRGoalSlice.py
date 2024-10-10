@@ -835,12 +835,12 @@ train_episode_length = 500
 test_episode_length = 500
 
 # number of episodes per experiment
-episodes = 50000
+episodes = 10000
 
 # parameters for agent
 gamma = 0.8
 # gamma = 0.95
-lr = 0.5
+lr = 1
 # lr = 0.1 grid cells
 # lr = 1 gerauds
 initial_train_epsilon = 0.6
