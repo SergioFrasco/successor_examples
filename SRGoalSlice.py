@@ -785,7 +785,7 @@ def experiment_sarsa_wvf(train_episode_length,test_episode_length,episodes,gamma
     
     # number of exepriments = goal slices size
     # The list that containt the number of goal sizes
-    goal_sizes = [50, 75, 100, 125, 150, 175, 200, 225]  # Example goal sizes (can be changed)
+    goal_sizes = [50, 60, 70, 80, 90, 100]  # Example goal sizes (can be changed)
 
     # Initialize empty lists to store results
     results = []
@@ -819,7 +819,7 @@ def experiment_sarsa_wvf(train_episode_length,test_episode_length,episodes,gamma
 cmap = plt.cm.viridis
 cmap.set_bad(color='white')
 
-grid_size = 15
+grid_size = 10
 pattern = "empty"
 env = SimpleGrid(grid_size, block_pattern=pattern, obs_mode="index")
 env.reset(agent_pos=[0, 0], goal_pos=[0, grid_size - 1])
@@ -835,7 +835,7 @@ train_episode_length = 500
 test_episode_length = 500
 
 # number of episodes per experiment
-episodes = 10000
+episodes = 7000
 
 # parameters for agent
 gamma = 0.8
