@@ -831,11 +831,11 @@ env.reset(agent_pos=[0, 0], goal_pos=[0, grid_size - 1])
 # parameters for training
 
 # number of steps agent takes in envirnoment
-train_episode_length = 500
-test_episode_length = 500
+train_episode_length = 1000
+test_episode_length = 1000
 
 # number of episodes per experiment
-episodes = 8000
+episodes = 10000
 
 # parameters for agent
 gamma = 0.8
