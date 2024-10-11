@@ -242,15 +242,6 @@ class TabularSuccessorAgent(object):
         self.goals = np.zeros((state_size, grid_size, grid_size), dtype=int)
         self.generate_goal_matrices()
     
-    # OLD FUNCTION
-    # Computes action values by combining the SR with the current reward prediction (w) or a specified goal
-    # def Q_estimates(self, state, goal=None):
-    #     if goal is None:
-    #         goal = self.w
-    #     else:
-    #         goal = utils.onehot(goal, self.state_size)
-    #     return np.matmul(self.M[:, state, :], goal)
-    
     def Q_estimates(self, state, goal=None):
         if goal is None:
             goal = np.argmax(np.sum(self.w, axis=1))
@@ -287,30 +278,6 @@ class TabularSuccessorAgent(object):
             # print(f"Slice {slice_index}: Position ({x}, {y}) set as goal")
         
         return self.goals
-
-    # generate number of goals, if no goal size specified, goal_size = state_size
-    # def generate_goal_matrices(self):
-    #     self.goals = np.zeros((self.goal_size, grid_size, grid_size), dtype=int)
-        
-    #     available_positions = [(x, y) for x in range(grid_size) for y in range(grid_size) if [x, y] not in env.blocks]
-    #     for slice_index in range(self.goal_size):
-    #         if slice_index < len(available_positions):
-    #             x, y = available_positions[slice_index]
-    #             self.goals[slice_index, x, y] = 1
-    #             print(f"Slice {slice_index}: Position ({x}, {y}) set as goal")
-    #         else:
-    #             break
-        
-    #     return self.goals
-
-    # OLD W UPDATE
-    # Updates the reward prediction weights based on the rewards observed
-    # def update_w(self, current_exp):
-    #     s_1 = current_exp[2]
-    #     r = current_exp[3]
-    #     error = r - self.w[s_1]
-    #     self.w[s_1] += self.learning_rate * error        
-    #     return error
     
     def update_w(self, current_exp):
         s_1 = current_exp[2]  # next state
@@ -349,59 +316,8 @@ class TabularSuccessorAgent(object):
             wvf[:, goal] = np.max(np.matmul(self.M, goal_reward), axis=0)
         return wvf
 
-# -------------------------- Class for SARSA based agents (Awjuliani) ------------------------
-class SARSATabularSuccessorAgent(object):
-    def __init__(self, state_size, action_size, learning_rate, gamma):
-        self.state_size = state_size
-        self.action_size = action_size
-        self.M = np.stack([np.identity(state_size) for i in range(action_size)])
-        self.w = np.zeros([state_size])
-        self.learning_rate = learning_rate
-        self.gamma = gamma
-        
-    def Q_estimates(self, state, goal=None):
-        # Generate Q values for all actions.
-        if goal == None:
-            goal = self.w
-        else:
-            goal = utils.onehot(goal, self.state_size)
-        return np.matmul(self.M[:,state,:],goal)
-    
-    def sample_action(self, state, goal=None, epsilon=0.0):
-        # Samples action using epsilon-greedy approach
-        if np.random.uniform(0, 1) < epsilon:
-            action = np.random.randint(self.action_size)
-        else:
-            Qs = self.Q_estimates(state, goal)
-            action = np.argmax(Qs)
-        return action
-    
-    def update_w(self, current_exp):
-        # A simple update rule
-        s_1 = current_exp[2]
-        r = current_exp[3]
-        error = r - self.w[s_1]
-        self.w[s_1] += self.learning_rate * error        
-        return error
-    
-    def update_sr(self, current_exp, next_exp):
-        # SARSA TD learning rule
-        s = current_exp[0]
-        s_a = current_exp[1]
-        s_1 = current_exp[2]
-        s_a_1 = next_exp[1]
-        r = current_exp[3]
-        d = current_exp[4]
-        I = utils.onehot(s, env.state_size)
-        if d:            
-            td_error = (I + self.gamma * utils.onehot(s_1, env.state_size) - self.M[s_a, s, :])
-        else:
-            td_error = (I + self.gamma * self.M[s_a_1, s_1, :] - self.M[s_a, s, :])
-        self.M[s_a, s, :] += self.learning_rate * td_error
-        return td_error
 
-# --------------------Supporting Functions---------
-
+# --------------------Supporting Functions---------------------
 # assists with finding positions for random agent initialization.
 # to ensure uniform random distribution, first find the valid states, then randomly choose from them
 def random_valid_position(env):
@@ -442,221 +358,6 @@ def calculate_rate_map(experiences, env):
     rate_map = occupancy_grid + 1e-10 / (np.sum(occupancy_grid) + 1e-10)  # Add small epsilon to avoid division by zero
     return utils.mask_grid(rate_map, env.blocks)
 
-# def calculate_rate_map(experiences, env):
-#     occupancy_grid = np.zeros([env.grid_size, env.grid_size])
-#     for experience in experiences:
-#         occupancy_grid[tuple(env.state_to_point(experience[0]))] += 1
-#     total_occupancy = np.sum(occupancy_grid)
-#     if total_occupancy > 0:
-#         rate_map = occupancy_grid / total_occupancy
-#     else:
-#         rate_map = np.zeros_like(occupancy_grid)  # or handle this case as appropriate
-#     return utils.mask_grid(rate_map, env.blocks)
-
-
-def run_sarsa(train_episode_length,test_episode_length,episodes,gamma,lr,initial_train_epsilon,epsilon_decay,test_epsilon,goal_size):
-
-    # ---------------------------Intermediate Setup --------------------------------
-    # Initialize the SARSA agent
-    SARSAagent = SARSATabularSuccessorAgent(env.state_size, env.action_size, lr, gamma)
-
-    # Initialize the new Q-learning agent and environment
-    agent = TabularSuccessorAgent(env.state_size, env.action_size, lr, gamma, goal_size)
-
-    # Filter out slices without goals
-    goals_with_targets = [slice_index for slice_index in range(agent.goals.shape[0]) if np.any(agent.goals[slice_index])]
-
-    print(f"Number of slices with goals: {len(goals_with_targets)}")
-
-    # Calculate episodes per goal
-    episodes_per_goal = episodes // len(goals_with_targets)
-    remaining_episodes = episodes % len(goals_with_targets)
-
-    # Shuffle goal order
-    goal_order = np.random.permutation(goal_size)
-    # Shuffle the order of goals with targets
-    np.random.shuffle(goals_with_targets)
-
-    #  ---------------------- SARSA Training loop (Awjuliani) ----------------------
-    SARSA_experiences = []
-    SARSA_test_experiences = []
-    SARSA_test_lengths = []
-    SARSA_lifetime_td_errors = []
-
-    # For Grid score
-    SARSA_rate_map = np.zeros([env.grid_size, env.grid_size])
-
-    for i in tqdm(range(episodes), desc = "Training SARSA"):
-        # Train phase
-        agent_start = [0,0]
-        # agent_start = random_valid_position(env)
-        
-        if i < episodes // 2:
-            goal_pos = [0, grid_size-1]
-        else:
-            # if i == episodes // 2:
-            #     print("\n Half way through SARSA, Switched reward locations")
-            goal_pos = [grid_size-1,grid_size-1]
-        env.reset(agent_pos=agent_start, goal_pos=goal_pos)
-        state = env.observation
-        episodic_error = []
-        for j in range(train_episode_length):
-            action = SARSAagent.sample_action(state, epsilon=initial_train_epsilon)
-            reward = env.step(action)
-            state_next = env.observation
-            done = env.done
-            SARSA_experiences.append([state, action, state_next, reward, done])
-
-            SARSA_rate_map += env.state_to_grid(state)
-
-            state = state_next
-            if (j > 1):
-                td_sr = SARSAagent.update_sr(SARSA_experiences[-2], SARSA_experiences[-1])
-                td_w = SARSAagent.update_w(SARSA_experiences[-1])
-                episodic_error.append(np.mean(np.abs(td_sr)))
-            if env.done:
-                td_sr = SARSAagent.update_sr(SARSA_experiences[-1], SARSA_experiences[-1])
-                episodic_error.append(np.mean(np.abs(td_sr)))
-                break
-
-        SARSA_lifetime_td_errors.append(np.mean(episodic_error))
-
-    SARSA_rate_map = calculate_rate_map(SARSA_experiences, env)
-        # End of episode
-        
-        # Test phase
-        # env.reset(agent_pos=agent_start, goal_pos=goal_pos)
-        # state = env.observation
-        # for j in range(test_episode_length):
-        #     action = agent.sample_action(state, epsilon=test_epsilon)
-        #     reward = env.step(action)
-        #     state_next = env.observation
-        #     SARSA_test_experiences.append([state, action, state_next, reward])
-        #     state = state_next
-        #     if env.done:
-        #         break
-        # SARSA_test_lengths.append(j)
-        
-    nbins = grid_size  # value for number of bins
-    scorer = GridScorer(nbins)
-
-    # Get grid scores and spatial autocorrelation (SAC)
-    sac, grid_props  = scorer.get_scores(SARSA_rate_map)
-
-    score = scorer.plot_grid_score(sac)
-    grid_score = str(np.around(score[1]["gridscore"], decimals=4, out=None))
-    # plt.show()
-    plt.savefig('plots/SARSA Grid Score.png')
-    
-    # Grid-score
-    # grid_score = grid_props['gridscore']
-    print("SARSA Grid Score: ", grid_score)
-
-    # SAC
-    scorer.plot_sac(sac, title="SARSA Spatial Autocorrelogram", score="Grid Score: {}".format(sac))
-    # plt.show()
-    plt.savefig('plots/SARSA Spatial Auto Correlation.png')
-
-    
-    
-
-   
-
-    # scorer.plot_sac(sac)
-    # scorer.plot_grid_score(stGrd) dont know the plot for this
-    # Print these values
-    # print("Spatial Autocorrelation:", sac)
-    # print("Grid Cell Properties:", stGrd)
-
-    # After SARSA policy training
-    plot_grid_cells(SARSAagent, env, "SARSA Grid Cells", num_grid_cells = 16)
-    plot_value_functions(SARSAagent, env, "SARSA Value Functions")
-    plot_raw_sr(SARSAagent.M, env, "SARSA SR Matrix")
-
-    return grid_score
-
-
-# #  --------------------Random Policy Training Loop --------------------
-# # This loop trains the agent using a random policy (epsilon = 1)
-
-# random_policy_experiences = []
-# random_policy_test_experiences = []
-# random_policy_test_lengths = []
-# random_policy_td_errors = []
-
-# # Reinitialize the agent
-# random_policy_agent = TabularSuccessorAgent(env.state_size, env.action_size, lr, gamma, goal_size)
-
-# # Filter out slices without goals
-# goals_with_targets = [slice_index for slice_index in range(agent.goals.shape[0]) if np.any(agent.goals[slice_index])]
-
-# print(f"Number of slices with goals: {len(goals_with_targets)}")
-
-# # Calculate episodes per goal
-# episodes_per_goal = episodes // len(goals_with_targets)
-# remaining_episodes = episodes % len(goals_with_targets)
-
-# # Shuffle the order of goals with targets
-# np.random.shuffle(goals_with_targets)
-
-# # Training loop for random policy
-# for episode in range(episodes):
-#     goal_index = goals_with_targets[episode % len(goals_with_targets)]
-    
-#     epsilon = 1  # Set epsilon to 1 for random policy
-    
-#     # training phase
-#     agent_start = random_valid_position(env)
-#     goal_pos = env.state_to_point(np.where(random_policy_agent.goals[goal_index] == 1)[0][0])
-
-#     env.reset(agent_pos=agent_start, goal_pos=goal_pos)
-#     state = env.observation
-#     episodic_error = []
-
-#     for j in range(train_episode_length):
-#         action = random_policy_agent.sample_action(state, epsilon=epsilon)
-#         reward = env.step(action)
-#         next_state = env.observation
-#         done = env.done
-#         random_policy_experiences.append([state, action, next_state, reward])
-#         experience = [state, action, next_state, reward, done]
-        
-#         td_sr = random_policy_agent.update_sr(experience)
-#         td_w = random_policy_agent.update_w(experience)  # This now updates for all goals
-#         episodic_error.append(np.mean(np.abs(td_sr)))
-        
-#         state = next_state
-#         if done:
-#             break
-    
-#     random_policy_td_errors.append(np.mean(episodic_error))
-    
-#     # Test phase
-#     agent_start = random_valid_position(env)
-#     env.reset(agent_pos=agent_start, goal_pos=goal_pos)
-#     state = env.observation
-#     for j in range(test_episode_length):
-#         action = random_policy_agent.sample_action(state, epsilon=test_epsilon)
-#         reward = env.step(action)
-#         state_next = env.observation
-#         random_policy_test_experiences.append([state, action, state_next, reward])
-#         state = state_next
-#         if env.done:
-#             break
-#     random_policy_test_lengths.append(j)
-
-#     # Print progress every 50 episodes
-#     if (episode + 1) % 50 == 0:
-#         print(f"Random policy training: Completed episode {episode + 1}")
-
-# print("\nRandom policy training completed.")
-
-# # After random policy training
-# # plot_grid_cells(random_policy_agent, env, "Higher Eigenvectors", num_grid_cells=16)
-# plot_grid_cells(random_policy_agent, env, "Grid Cells (Random Policy)", num_grid_cells = 16)
-# plot_value_functions(random_policy_agent, env, "Value Functions (Random Policy)")
-# plot_raw_sr(random_policy_agent.M, env, "SR Matrix Random")
-
 
 
 # --------------------Epsilon greedy Training Loop --------------------
@@ -695,7 +396,7 @@ def run_wvf(train_episode_length,test_episode_length,episodes,gamma,lr,initial_t
     # print("plotting goals")
     # plot_goal_matrices(epsilon_greedy_agent.goals, env)
 
-    for episode in tqdm(range(episodes), desc = "Training WVF"):
+    for episode in range(episodes):
         goal_index = goals_with_targets[episode % len(goals_with_targets)]
 
         agent_start = random_valid_position(env)
@@ -759,33 +460,32 @@ def run_wvf(train_episode_length,test_episode_length,episodes,gamma,lr,initial_t
 
     score = wvf_scorer.plot_grid_score(sac)
     grid_score = str(np.around(score[1]["gridscore"], decimals=4, out=None))
-    plt.savefig('plots/WVF Grid Score.png')
-    # SAC
-    wvf_scorer.plot_sac(sac, title="WVF Spatial Autocorrelogram", score="Grid Score: {}".format(sac))
-    # plt.show()
-    plt.savefig('plots/WVF Spatial Auto Correlation.png')
+    # plt.savefig('plots/WVF Grid Score.png')
+    # # SAC
+    # wvf_scorer.plot_sac(sac, title="WVF Spatial Autocorrelogram", score="Grid Score: {}".format(sac))
+    # # plt.show()
+    # plt.savefig('plots/WVF Spatial Auto Correlation.png')
 
     # Grid-score
     # grid_score = grid_props['gridscore']
     
     # plt.show()
     
+    # print("WVF Grid Score: ", grid_score)
 
-    print("WVF Grid Score: ", grid_score)
+    # # After epsilon-greedy policy training
+    # plot_grid_cells(epsilon_greedy_agent, env, "WVF Grid Cells", num_grid_cells = 16)
+    # plot_value_functions(epsilon_greedy_agent, env, "WVF Value Functions")
+    # plot_raw_sr(epsilon_greedy_agent.M, env, "WVF SR Matrix")
 
-    # After epsilon-greedy policy training
-    plot_grid_cells(epsilon_greedy_agent, env, "WVF Grid Cells", num_grid_cells = 16)
-    plot_value_functions(epsilon_greedy_agent, env, "WVF Value Functions")
-    plot_raw_sr(epsilon_greedy_agent.M, env, "WVF SR Matrix")
-
-    return grid_score
+    return float(grid_score)
 
 # The Main experiment that compares the grid score from traditional SARSA against the new WVF Method
-def experiment_sarsa_wvf(train_episode_length,test_episode_length,episodes,gamma,lr,initial_train_epsilon,epsilon_decay,test_epsilon):
+def experiment_sarsa_wvf(train_episode_length,test_episode_length,episodes,gamma,lr,initial_train_epsilon,epsilon_decay,test_epsilon, num_runs):
     
     # number of exepriments = goal slices size
     # The list that containt the number of goal sizes
-    goal_sizes = [50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100]  # Example goal sizes (can be changed)
+    goal_sizes = [1, 10, 20, 30 , 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100]  # Example goal sizes (can be changed) 1, 10, 20, 30 , 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100
 
     # Initialize empty lists to store results
     results = []
@@ -799,20 +499,27 @@ def experiment_sarsa_wvf(train_episode_length,test_episode_length,episodes,gamma
 
     # run SARSA and WVF with decreasing goal sizes and store results together
     for goal_size in goal_sizes:
-        print("\nExperiment for goal size: ", goal_size)
-        sarsa_grid_score = run_sarsa(train_episode_length, test_episode_length, episodes, gamma, lr, initial_train_epsilon, epsilon_decay, test_epsilon, goal_size)
-        wvf_grid_score = run_wvf(train_episode_length, test_episode_length, episodes, gamma, lr, initial_train_epsilon, epsilon_decay, test_epsilon, goal_size)
+        print("\nWVF Experiment for goal size:", goal_size)
+        total_score = 0.0  # Initialize a score accumulator
+
+        # Run the SARSA experiment num_runs times
+        for _ in range(num_runs):
+            wvf_grid_score = run_wvf(train_episode_length, test_episode_length, episodes, gamma, lr, initial_train_epsilon, epsilon_decay, test_epsilon, goal_size)
+            total_score += wvf_grid_score  # Accumulate the score
+
+        # Calculate the average score for the current goal size
+        average_score = total_score / num_runs
         
-        # append the goal size, SARSA score, and WVF score to combined_results
-        results.append([goal_size, sarsa_grid_score, wvf_grid_score])
+        # Append only the goal size and average SARSA score to the results
+        results.append([goal_size, average_score])  # append the goal size, SARSA score, and WVF score to combined_results
 
     # dtore the results in a single CSV file
-    combined_df = pd.DataFrame(results, columns=['Goal Size', 'SARSA Grid Score', 'WVF Grid Score'])
+    combined_df = pd.DataFrame(results, columns=['Goal Size', 'WVF Grid Score'])
 
     # Save to a single CSV
-    combined_df.to_csv('sarsa_wvf_grid_scores.csv', index=False)
+    combined_df.to_csv('wvf_grid_scores.csv', index=False)
 
-    print("Results saved to CSV.")
+    print("WVF Results saved to CSV.")
 
 
 # --------------------Environment setup --------------------
@@ -820,22 +527,22 @@ cmap = plt.cm.viridis
 cmap.set_bad(color='white')
 
 grid_size = 10
+
 pattern = "empty"
 env = SimpleGrid(grid_size, block_pattern=pattern, obs_mode="index")
 env.reset(agent_pos=[0, 0], goal_pos=[0, grid_size - 1])
-# Plot the arena
-# print("Four Rooms Arena: ")
-
 
 # --------------------Training and Testing Parameters for Q-learning agents and SARSA agents --------------------------------
 # parameters for training
 
+num_runs = 10
+
 # number of steps agent takes in envirnoment
-train_episode_length = 1000
-test_episode_length = 1000
+train_episode_length = 100
+test_episode_length = 100
 
 # number of episodes per experiment
-episodes = 10000
+episodes = 3000
 
 # parameters for agent
 gamma = 0.8
@@ -848,87 +555,4 @@ initial_train_epsilon = 0.6
 epsilon_decay = 0.995
 test_epsilon = 0.01
 
-experiment_sarsa_wvf(train_episode_length,test_episode_length,episodes,gamma,lr,initial_train_epsilon,epsilon_decay,test_epsilon)
-
-# # Compare raw SR matrices
-# plt.figure(figsize=(20, 10))
-# plt.subplot(121)
-# plt.imshow(np.mean(random_policy_agent.M, axis=0), cmap='viridis')
-# plt.title("Random Policy SR Matrix")
-# plt.colorbar()
-# plt.subplot(122)
-# plt.imshow(np.mean(epsilon_greedy_agent.M, axis=0), cmap='viridis')
-# plt.title("Epsilon-Greedy Policy SR Matrix")
-# plt.colorbar()
-# plt.tight_layout()
-# plt.show()
-
-
-# # ---------After training---------
-# print("Training Occupancy Plot\n")
-# print_occupancy(experiences, env)
-
-# print("Test Occupancy Plot\n")
-# print_occupancy(test_experiences, env)
-
-# print("Goal Slices")
-# plot_goal_matrices(agent.goals, env)
-
-# Plot vlaue functions for epsilon greedy agent
-# plot_value_functions(agent, env, "Value Functions (Epsilon-Greedy Policy)")
-
-# print("WVF: Raw SR Matrix")
-# plot_raw_sr(agent.M, env, "WVF e-Greedy SR Matrix")
-# print("plot_srs\n")
-# plot_srs(1, agent.M, env)
-# print("plot_wvf\n")
-# plot_wvf(agent, env)
-
-
-# fig = plt.figure(figsize=(10, 6))
-
-# ax = fig.add_subplot(2, 2, 1)
-# ax.plot(lifetime_td_errors)
-# ax.set_title("TD Error")
-# ax = fig.add_subplot(2, 2, 2)
-# ax.plot(test_lengths)
-# ax.set_title("Episode Lengths")
-
-# averaged_M = np.mean(agent.M, axis=0)
-# plt.show()
-
-# averaged_M = np.reshape(averaged_M, [env.state_size, grid_size, grid_size])
-
-# cmap = plt.cm.viridis
-# cmap.set_bad(color='white')
-
-# plt.figure(1, figsize=(grid_size*3, grid_size*3))
-# for i in range(env.state_size):
-#     if env.state_to_point(i) not in env.blocks:
-#         ax = plt.subplot(grid_size, grid_size, i + 1)
-#         ax.imshow(utils.mask_grid(averaged_M[i,:,:], env.blocks), cmap=cmap)
-
-# M_s = np.mean(agent.M[:,:,:], axis=0)
-# colors = np.zeros([env.state_size])
-# for bottleneck in env.bottlenecks:
-#     grid = np.zeros([env.grid_size, env.grid_size])
-#     grid[bottleneck[0], bottleneck[1]] = 1
-#     grid = grid.flatten()
-#     b_state = np.where(grid == 1)[0][0]
-#     colors[b_state] = 1
-# pca = PCA(n_components=2)
-# pca_result = pca.fit_transform(M_s[:])
-
-# plt.scatter(pca_result[:, 0], pca_result[:, 1], c=colors)
-
-# a = np.zeros([env.state_size])
-# for i in range(env.state_size):
-#     Qs = agent.Q_estimates(i)
-#     V = np.mean(Qs)
-#     a[i] = V
-# V_Map = np.reshape(a, [grid_size, grid_size])
-# V_Map = np.sqrt(V_Map)
-
-# V_Map = utils.mask_grid(V_Map, env.blocks)
-
-# plt.show()
+experiment_sarsa_wvf(train_episode_length,test_episode_length,episodes,gamma,lr,initial_train_epsilon,epsilon_decay,test_epsilon,num_runs)

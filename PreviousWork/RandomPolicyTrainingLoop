@@ -1,0 +1,81 @@
+
+# #  --------------------Random Policy Training Loop --------------------
+# # This loop trains the agent using a random policy (epsilon = 1)
+
+# random_policy_experiences = []
+# random_policy_test_experiences = []
+# random_policy_test_lengths = []
+# random_policy_td_errors = []
+
+# # Reinitialize the agent
+# random_policy_agent = TabularSuccessorAgent(env.state_size, env.action_size, lr, gamma, goal_size)
+
+# # Filter out slices without goals
+# goals_with_targets = [slice_index for slice_index in range(agent.goals.shape[0]) if np.any(agent.goals[slice_index])]
+
+# print(f"Number of slices with goals: {len(goals_with_targets)}")
+
+# # Calculate episodes per goal
+# episodes_per_goal = episodes // len(goals_with_targets)
+# remaining_episodes = episodes % len(goals_with_targets)
+
+# # Shuffle the order of goals with targets
+# np.random.shuffle(goals_with_targets)
+
+# # Training loop for random policy
+# for episode in range(episodes):
+#     goal_index = goals_with_targets[episode % len(goals_with_targets)]
+    
+#     epsilon = 1  # Set epsilon to 1 for random policy
+    
+#     # training phase
+#     agent_start = random_valid_position(env)
+#     goal_pos = env.state_to_point(np.where(random_policy_agent.goals[goal_index] == 1)[0][0])
+
+#     env.reset(agent_pos=agent_start, goal_pos=goal_pos)
+#     state = env.observation
+#     episodic_error = []
+
+#     for j in range(train_episode_length):
+#         action = random_policy_agent.sample_action(state, epsilon=epsilon)
+#         reward = env.step(action)
+#         next_state = env.observation
+#         done = env.done
+#         random_policy_experiences.append([state, action, next_state, reward])
+#         experience = [state, action, next_state, reward, done]
+        
+#         td_sr = random_policy_agent.update_sr(experience)
+#         td_w = random_policy_agent.update_w(experience)  # This now updates for all goals
+#         episodic_error.append(np.mean(np.abs(td_sr)))
+        
+#         state = next_state
+#         if done:
+#             break
+    
+#     random_policy_td_errors.append(np.mean(episodic_error))
+    
+#     # Test phase
+#     agent_start = random_valid_position(env)
+#     env.reset(agent_pos=agent_start, goal_pos=goal_pos)
+#     state = env.observation
+#     for j in range(test_episode_length):
+#         action = random_policy_agent.sample_action(state, epsilon=test_epsilon)
+#         reward = env.step(action)
+#         state_next = env.observation
+#         random_policy_test_experiences.append([state, action, state_next, reward])
+#         state = state_next
+#         if env.done:
+#             break
+#     random_policy_test_lengths.append(j)
+
+#     # Print progress every 50 episodes
+#     if (episode + 1) % 50 == 0:
+#         print(f"Random policy training: Completed episode {episode + 1}")
+
+# print("\nRandom policy training completed.")
+
+# # After random policy training
+# # plot_grid_cells(random_policy_agent, env, "Higher Eigenvectors", num_grid_cells=16)
+# plot_grid_cells(random_policy_agent, env, "Grid Cells (Random Policy)", num_grid_cells = 16)
+# plot_value_functions(random_policy_agent, env, "Value Functions (Random Policy)")
+# plot_raw_sr(random_policy_agent.M, env, "SR Matrix Random")
