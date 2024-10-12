@@ -353,10 +353,15 @@ def get_goal_sequence(total_episodes, goal_size):
 
 def calculate_rate_map(experiences, env):
     occupancy_grid = np.zeros([env.grid_size, env.grid_size])
+    
     for experience in experiences:
-        occupancy_grid[tuple(env.state_to_point(experience[0]))] += 1
-    rate_map = occupancy_grid + 1e-10 / (np.sum(occupancy_grid) + 1e-10)  # Add small epsilon to avoid division by zero
-    return utils.mask_grid(rate_map, env.blocks)
+        position = env.state_to_point(experience[0])  # Ensure this maps correctly
+        occupancy_grid[tuple(position)] += 1
+    
+    total_steps = np.sum(occupancy_grid) + 1e-10  # Total number of time steps
+    rate_map = occupancy_grid / total_steps  # Normalize occupancy grid
+    return utils.mask_grid(rate_map, env.blocks)  # Apply masking if necessary
+
 
 
 
@@ -382,16 +387,11 @@ def run_wvf(train_episode_length,test_episode_length,episodes,gamma,lr,initial_t
     # Shuffle the order of goals with targets
     np.random.shuffle(goals_with_targets)
 
-    # Calculate episodes per goal
-    episodes_per_goal = episodes // len(goals_with_targets)
-    remaining_episodes = episodes % len(goals_with_targets)
-
     # # Ensure the videos directory exists
     # if not os.path.exists('videos'):
     #     os.makedirs('videos')
 
     epsilon = initial_train_epsilon
-
 
     # print("plotting goals")
     # plot_goal_matrices(epsilon_greedy_agent.goals, env)
@@ -414,10 +414,10 @@ def run_wvf(train_episode_length,test_episode_length,episodes,gamma,lr,initial_t
             experiences.append([state, action, next_state, reward])
             experience = [state, action, next_state, reward, done]
 
-            WVF_rate_map += env.state_to_grid(state)
+            # WVF_rate_map += env.state_to_grid(state)
             
             td_sr = epsilon_greedy_agent.update_sr(experience)
-            td_w = epsilon_greedy_agent.update_w(experience)  # This now updates for all goals
+            td_w = epsilon_greedy_agent.update_w(experience)  
             episodic_error.append(np.mean(np.abs(td_sr)))
             
             state = next_state
@@ -452,14 +452,26 @@ def run_wvf(train_episode_length,test_episode_length,episodes,gamma,lr,initial_t
 
     # print("\nWVF training completed.")
     
-    nbins = grid_size  # value for number of bins
-    wvf_scorer = GridScorer(nbins)
 
-    # Get grid scores and spatial autocorrelation (SAC)
-    sac, grid_props  = wvf_scorer.get_scores(WVF_rate_map)
+    nbins = grid_size 
+    WVF_rate_map = calculate_rate_map(experiences, env) 
+    grid_scorer = GridScorer(nbins)
 
-    score = wvf_scorer.plot_grid_score(sac)
-    grid_score = str(np.around(score[1]["gridscore"], decimals=4, out=None))
+    # Get the grid score from the rate map
+    _, stGrd = grid_scorer.get_scores(WVF_rate_map)
+    grid_score = stGrd['gridscore']
+
+
+    #------
+    # nbins = grid_size  # value for number of bins
+    # wvf_scorer = GridScorer(nbins)
+
+    # # Get grid scores and spatial autocorrelation (SAC)
+    # sac, grid_props  = wvf_scorer.get_scores(WVF_rate_map)
+
+    # score = wvf_scorer.plot_grid_score(sac)
+    # grid_score = str(np.around(score[1]["gridscore"], decimals=4, out=None))
+    #------
     # plt.savefig('plots/WVF Grid Score.png')
     # # SAC
     # wvf_scorer.plot_sac(sac, title="WVF Spatial Autocorrelogram", score="Grid Score: {}".format(sac))
@@ -506,6 +518,7 @@ def experiment_sarsa_wvf(train_episode_length,test_episode_length,episodes,gamma
         for _ in range(num_runs):
             wvf_grid_score = run_wvf(train_episode_length, test_episode_length, episodes, gamma, lr, initial_train_epsilon, epsilon_decay, test_epsilon, goal_size)
             total_score += wvf_grid_score  # Accumulate the score
+            print("WFV Grid Score:", wvf_grid_score)
 
         # Calculate the average score for the current goal size
         average_score = total_score / num_runs
@@ -535,23 +548,23 @@ env.reset(agent_pos=[0, 0], goal_pos=[0, grid_size - 1])
 # --------------------Training and Testing Parameters for Q-learning agents and SARSA agents --------------------------------
 # parameters for training
 
-num_runs = 10
+num_runs = 30
 
 # number of steps agent takes in envirnoment
-train_episode_length = 100
-test_episode_length = 100
+train_episode_length = 200
+test_episode_length = 200
 
 # number of episodes per experiment
-episodes = 3000
+episodes = 5000
 
 # parameters for agent
-gamma = 0.8
-# gamma = 0.95
+# gamma = 0.8
+gamma = 0.9
 lr = 1
 # lr = 0.1 grid cells
 # lr = 1 gerauds
-initial_train_epsilon = 0.6
-# initial_train_epsilon = 1
+# initial_train_epsilon = 0.6
+initial_train_epsilon = 1
 epsilon_decay = 0.995
 test_epsilon = 0.01
 

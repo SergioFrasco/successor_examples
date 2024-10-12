@@ -6,7 +6,6 @@ from gridworld import SimpleGrid
 from tqdm import tqdm
 import os
 import matplotlib.animation as animation
-from sklearn.decomposition import PCA 
 import random
 import pandas as pd
 # Calculating the grid score
@@ -233,13 +232,16 @@ def plot_raw_sr(sr, env, experiment_name):
 
 # -------------------------- Class for SARSA based agents (Awjuliani) ------------------------
 class SARSATabularSuccessorAgent(object):
-    def __init__(self, state_size, action_size, learning_rate, gamma):
+    def __init__(self, state_size, action_size, learning_rate, gamma, goal_size):
         self.state_size = state_size
         self.action_size = action_size
         self.M = np.stack([np.identity(state_size) for i in range(action_size)])
         self.w = np.zeros([state_size])
         self.learning_rate = learning_rate
         self.gamma = gamma
+        self.goal_size = goal_size
+        self.goals = np.zeros((state_size, grid_size, grid_size), dtype=int)
+        self.generate_goal_matrices()
         
     def Q_estimates(self, state, goal=None):
         # Generate Q values for all actions.
@@ -257,6 +259,27 @@ class SARSATabularSuccessorAgent(object):
             Qs = self.Q_estimates(state, goal)
             action = np.argmax(Qs)
         return action
+    
+    def generate_goal_matrices(self):
+        # Initialize the goal matrix with zeros
+        self.goals = np.zeros((self.goal_size, grid_size, grid_size), dtype=int)
+        
+        # Get all available positions (excluding blocks)
+        available_positions = [(x, y) for x in range(grid_size) for y in range(grid_size) if (x, y) not in env.blocks]
+        
+        # Check if we have enough available positions to place the goals
+        if self.goal_size > len(available_positions):
+            raise ValueError("Not enough available positions to place all goals.")
+        
+        # Shuffle the available positions to ensure random placement
+        random.shuffle(available_positions)
+        
+        # Assign a unique random position to each slice
+        for slice_index in range(self.goal_size):
+            x, y = available_positions[slice_index]
+            self.goals[slice_index, x, y] = 1
+            # print(f"Slice {slice_index}: Position ({x}, {y}) set as goal")
+        
     
     def update_w(self, current_exp):
         # A simple update rule
@@ -319,19 +342,26 @@ def get_goal_sequence(total_episodes, goal_size):
 
 def calculate_rate_map(experiences, env):
     occupancy_grid = np.zeros([env.grid_size, env.grid_size])
+    
     for experience in experiences:
-        occupancy_grid[tuple(env.state_to_point(experience[0]))] += 1
-    rate_map = occupancy_grid + 1e-10 / (np.sum(occupancy_grid) + 1e-10)  # Add small epsilon to avoid division by zero
-    return utils.mask_grid(rate_map, env.blocks)
+        position = env.state_to_point(experience[0])  # Ensure this maps correctly
+        occupancy_grid[tuple(position)] += 1
+    
+    total_steps = np.sum(occupancy_grid) + 1e-10  # Total number of time steps
+    rate_map = occupancy_grid / total_steps  # Normalize occupancy grid
+    return utils.mask_grid(rate_map, env.blocks)  # Apply masking if necessary
+
 
 
 def run_sarsa(train_episode_length,test_episode_length,episodes,gamma,lr,initial_train_epsilon,epsilon_decay,test_epsilon,goal_size):
 
     # ---------------------------Intermediate Setup --------------------------------
     # Initialize the SARSA agent
-    SARSAagent = SARSATabularSuccessorAgent(env.state_size, env.action_size, lr, gamma)
+    SARSAagent = SARSATabularSuccessorAgent(env.state_size, env.action_size, lr, gamma, goal_size)
 
-    #  ---------------------- SARSA Training loop (Awjuliani) ----------------------
+     # Filter out slices without goals
+    goals_with_targets = [slice_index for slice_index in range(SARSAagent.goals.shape[0]) if np.any(SARSAagent.goals[slice_index])]
+
     SARSA_experiences = []
     SARSA_test_experiences = []
     SARSA_test_lengths = []
@@ -340,14 +370,17 @@ def run_sarsa(train_episode_length,test_episode_length,episodes,gamma,lr,initial
     # For Grid score
     SARSA_rate_map = np.zeros([env.grid_size, env.grid_size])
 
-    for i in range(episodes):
+    # Shuffle the order of goals with targets
+    np.random.shuffle(goals_with_targets)
+
+
+    for episode in range(episodes):
+        goal_index = goals_with_targets[episode % len(goals_with_targets)]
         # Train phase
-        agent_start = [0,0]
-        
-        if i < episodes // 2:
-            goal_pos = [0, grid_size-1]
-        else:
-            goal_pos = [grid_size-1,grid_size-1]
+        # agent_start = [0,0]
+        agent_start = random_valid_position(env)
+        goal_pos = env.state_to_point(np.where(SARSAagent.goals[goal_index] == 1)[0][0])
+
         env.reset(agent_pos=agent_start, goal_pos=goal_pos)
         state = env.observation
         episodic_error = []
@@ -358,7 +391,7 @@ def run_sarsa(train_episode_length,test_episode_length,episodes,gamma,lr,initial
             done = env.done
             SARSA_experiences.append([state, action, state_next, reward, done])
 
-            SARSA_rate_map += env.state_to_grid(state)
+            # SARSA_rate_map += env.state_to_grid(state)
 
             state = state_next
             if (j > 1):
@@ -386,15 +419,24 @@ def run_sarsa(train_episode_length,test_episode_length,episodes,gamma,lr,initial
         # SARSA_test_lengths.append(j)
         # End of episode
 
-    SARSA_rate_map = calculate_rate_map(SARSA_experiences, env)  
-    nbins = grid_size  # value for number of bins
-    scorer = GridScorer(nbins)
+    nbins = grid_size 
+    SARSA_rate_map = calculate_rate_map(SARSA_experiences, env) 
+    grid_scorer = GridScorer(nbins)
 
-    # Get grid scores and spatial autocorrelation (SAC)
-    sac, grid_props  = scorer.get_scores(SARSA_rate_map)
+    # Get the grid score from the rate map
+    _, stGrd = grid_scorer.get_scores(SARSA_rate_map)
+    grid_score = stGrd['gridscore']
 
-    score = scorer.plot_grid_score(sac)
-    grid_score = str(np.around(score[1]["gridscore"], decimals=4, out=None))
+    # ---- current way to get grid score
+     # value for number of bins
+    # scorer = GridScorer(nbins)
+
+    # # Get grid scores and spatial autocorrelation (SAC)
+    # sac, grid_props  = scorer.get_scores(SARSA_rate_map)
+
+    # score = scorer.plot_grid_score(sac)
+    # grid_score = str(np.around(score[1]["gridscore"], decimals=4, out=None))
+    # ----
     # plt.show()
     # # plt.savefig('plots/SARSA Grid Score.png')
     
@@ -437,6 +479,7 @@ def experiment_sarsa(train_episode_length,test_episode_length,episodes,gamma,lr,
         for _ in range(num_runs):
             sarsa_grid_score = run_sarsa(train_episode_length, test_episode_length, episodes, gamma, lr, initial_train_epsilon, epsilon_decay, test_epsilon, goal_size)
             total_score += sarsa_grid_score  # Accumulate the score
+            print("Grid score:", sarsa_grid_score)
 
         # Calculate the average score for the current goal size
         average_score = total_score / num_runs
@@ -467,18 +510,18 @@ env.reset(agent_pos=[0, 0], goal_pos=[0, grid_size - 1])
 # --------------------Training and Testing Parameters for Q-learning agents and SARSA agents --------------------------------
 # parameters for training
 
-num_runs = 10
+num_runs = 30
 # number of steps agent takes in envirnoment
-train_episode_length = 100
-test_episode_length = 100
+train_episode_length = 200
+test_episode_length = 200
 
 # number of episodes per experiment
-episodes = 3000
+episodes = 5000
 
 # parameters for agent
 # gamma = 0.8
-gamma = 0.95
-lr = 5e-2
+gamma = 0.9
+lr = 1
 # lr = 0.1 grid cells
 # lr = 1 gerauds
 # initial_train_epsilon = 0.6
