@@ -1,7 +1,7 @@
 #!/bin/bash
-#SBATCH --job-name=WVF
-#SBATCH --output=/home-mscluster/sfrasco/result_WVF.txt
-#SBATCH --error=/home-mscluster/sfrasco/error_WVF.txt
+#SBATCH --job-name=compneuro_job2
+#SBATCH --output=/home-mscluster/sfrasco/result_job2.txt
+#SBATCH --error=/home-mscluster/sfrasco/error_job2.txt
 #SBATCH --ntasks=1
 #SBATCH --time=72:00:00
 #SBATCH --partition=bigbatch
