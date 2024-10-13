@@ -560,7 +560,7 @@ train_episode_length = 200
 test_episode_length = 200
 
 # number of episodes per experiment
-episodes = 5000
+episodes = 4000
 
 # parameters for agent
 # gamma = 0.8
