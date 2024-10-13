@@ -520,7 +520,7 @@ def experiment_sarsa_wvf(train_episode_length,test_episode_length,episodes,gamma
              # Check if the score is NaN, and set it to 0 if it is
             if math.isnan(wvf_grid_score):
                 wvf_grid_score = 0.0
-                
+
             total_score += wvf_grid_score  # Accumulate the score
            
             print("WFV Grid Score:", wvf_grid_score)
@@ -553,14 +553,14 @@ env.reset(agent_pos=[0, 0], goal_pos=[0, grid_size - 1])
 # --------------------Training and Testing Parameters for Q-learning agents and SARSA agents --------------------------------
 # parameters for training
 
-num_runs = 1
+num_runs = 20
 
 # number of steps agent takes in envirnoment
 train_episode_length = 200
 test_episode_length = 200
 
 # number of episodes per experiment
-episodes = 50
+episodes = 5000
 
 # parameters for agent
 # gamma = 0.8

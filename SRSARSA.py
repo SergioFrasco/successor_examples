@@ -513,7 +513,7 @@ env.reset(agent_pos=[0, 0], goal_pos=[0, grid_size - 1])
 # --------------------Training and Testing Parameters for Q-learning agents and SARSA agents --------------------------------
 # parameters for training
 
-num_runs = 30
+num_runs = 20
 # number of steps agent takes in envirnoment
 train_episode_length = 200
 test_episode_length = 200
