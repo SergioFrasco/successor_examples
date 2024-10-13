@@ -479,6 +479,9 @@ def experiment_sarsa(train_episode_length,test_episode_length,episodes,gamma,lr,
         for _ in range(num_runs):
             sarsa_grid_score = run_sarsa(train_episode_length, test_episode_length, episodes, gamma, lr, initial_train_epsilon, epsilon_decay, test_epsilon, goal_size)
             total_score += sarsa_grid_score  # Accumulate the score
+            # Check if the score is NaN, and set it to 0 if it is
+            if math.isnan(sarsa_grid_score):
+                sarsa_grid_score = 0.0
             print("Grid score:", sarsa_grid_score)
 
         # Calculate the average score for the current goal size
