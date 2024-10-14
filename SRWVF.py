@@ -507,7 +507,7 @@ def experiment_sarsa_wvf(train_episode_length,test_episode_length,episodes,gamma
     
     # number of exepriments = goal slices size
     # The list that containt the number of goal sizes
-    goal_sizes = [1, 10, 20, 30 , 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100]  # Example goal sizes (can be changed) 1, 10, 20, 30 , 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100
+    goal_sizes = [8, 16, 24, 32 , 40, 48, 54, 62]  # Example goal sizes (can be changed) 1, 10, 20, 30 , 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100
 
     # Initialize empty lists to store results
     results = []
@@ -547,7 +547,7 @@ def experiment_sarsa_wvf(train_episode_length,test_episode_length,episodes,gamma
 cmap = plt.cm.viridis
 cmap.set_bad(color='white')
 
-grid_size = 10
+grid_size = 8
 
 pattern = "empty"
 env = SimpleGrid(grid_size, block_pattern=pattern, obs_mode="index")
@@ -556,15 +556,15 @@ env.reset(agent_pos=[0, 0], goal_pos=[0, grid_size - 1])
 # --------------------Training and Testing Parameters for Q-learning agents and SARSA agents --------------------------------
 # parameters for training
 
-num_runs = 20
+num_runs = 10
 
 # number of steps agent takes in envirnoment
-train_episode_length = 400
-test_episode_length = 200
+train_episode_length = 300
+test_episode_length = 150
 
 # number of episodes per experiment
-episodes = 15000
-test_episodes = 500
+episodes = 5000
+test_episodes = 250
 
 # parameters for agent
 # gamma = 0.8
