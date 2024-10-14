@@ -11,6 +11,7 @@ import random
 import pandas as pd
 # Calculating the grid score
 from metrics import GridScorer
+from scipy.ndimage import gaussian_filter
 
 # ------------------ Recording Functions --------------------------------
 def record_agent_trajectories(env, agent, episodes, episode_length, epsilon, filename):
@@ -351,16 +352,25 @@ def get_goal_sequence(total_episodes, goal_size):
     
     return goal_sequence
 
-def calculate_rate_map(experiences, env):
+
+def calculate_rate_map(experiences, env, sigma=0.5):
     occupancy_grid = np.zeros([env.grid_size, env.grid_size])
     
     for experience in experiences:
-        position = env.state_to_point(experience[0])  # Ensure this maps correctly
+        position = env.state_to_point(experience[0])
         occupancy_grid[tuple(position)] += 1
     
-    total_steps = np.sum(occupancy_grid) + 1e-10  # Total number of time steps
-    rate_map = occupancy_grid / total_steps  # Normalize occupancy grid
-    return utils.mask_grid(rate_map, env.blocks)  # Apply masking if necessary
+    total_steps = np.sum(occupancy_grid) + 1e-10
+    rate_map = occupancy_grid / total_steps
+    
+    # Apply Gaussian smoothing
+    smoothed_rate_map = gaussian_filter(rate_map, sigma=sigma)
+    
+    # Mask blocked areas and unvisited locations
+    masked_rate_map = utils.mask_grid(smoothed_rate_map, env.blocks)
+    masked_rate_map[occupancy_grid == 0] = np.nan
+    
+    return masked_rate_map # Apply masking if necessary
 
 
 
@@ -368,7 +378,7 @@ def calculate_rate_map(experiences, env):
 # --------------------Epsilon greedy Training Loop --------------------
 # This loop trains the agent using a decaying epsilon greedy policy and trains it on goal slices in the arena.
 
-def run_wvf(train_episode_length,test_episode_length,episodes,gamma,lr,initial_train_epsilon,epsilon_decay,test_epsilon,goal_size):
+def run_wvf(train_episode_length,test_episode_length,episodes,gamma,lr,initial_train_epsilon,epsilon_decay,test_epsilon,goal_size,test_episodes):
 
     # Reinitialize the agent to ensure an independent learning process for the second loop
     epsilon_greedy_agent = TabularSuccessorAgent(env.state_size, env.action_size, lr, gamma, goal_size)
@@ -429,37 +439,37 @@ def run_wvf(train_episode_length,test_episode_length,episodes,gamma,lr,initial_t
         # Decay epsilon after each episode
         epsilon *= epsilon_decay
         epsilon = max(epsilon, 0.05)  # minimum epsilon value
-
-    WVF_rate_map = calculate_rate_map(experiences, env)
-
-        # Test phase
-        # agent_start = random_valid_position(env)  
-        # env.reset(agent_pos=agent_start, goal_pos=goal_pos)
-        # state = env.observation
-        # for j in range(test_episode_length):
-        #     action = epsilon_greedy_agent.sample_action(state, epsilon=test_epsilon)
-        #     reward = env.step(action)
-        #     state_next = env.observation
-        #     test_experiences.append([state, action, state_next, reward])
-        #     state = state_next
-        #     if env.done:
-        #         break
-        # test_lengths.append(j)
-
-    #     # Print progress every 50 episodes
-    #     if (episode + 1) % 50 == 0:
-    #         print(f"WVF training: Completed episode {episode + 1}")
-
-    # print("\nWVF training completed.")
     
+    # Testing phase
+    for episode in range(test_episodes):
+        agent_start = random_valid_position(env)
+        goal_pos = random_valid_position(env)  # Or choose a specific test goal strategy
+        env.reset(agent_pos=agent_start, goal_pos=goal_pos)
+        state = env.observation
+        
+        for step in range(test_episode_length):
+            action = epsilon_greedy_agent.sample_action(state, epsilon=test_epsilon)
+            reward = env.step(action)
+            next_state = env.observation
+            test_experiences.append([state, action, next_state, reward])
+            state = next_state
+            if env.done:
+                break
 
-    nbins = grid_size 
-    WVF_rate_map = calculate_rate_map(experiences, env) 
-    grid_scorer = GridScorer(nbins)
-
-    # Get the grid score from the rate map
-    _, stGrd = grid_scorer.get_scores(WVF_rate_map)
+    # Calculate grid score based on test experiences
+    test_rate_map = calculate_rate_map(test_experiences, env)
+    grid_scorer = GridScorer(grid_size)
+    _, stGrd = grid_scorer.get_scores(test_rate_map)
     grid_score = stGrd['gridscore']
+
+    return float(grid_score)
+    # nbins = grid_size 
+    # WVF_rate_map = calculate_rate_map(experiences, env) 
+    # grid_scorer = GridScorer(nbins)
+
+    # # Get the grid score from the rate map
+    # _, stGrd = grid_scorer.get_scores(WVF_rate_map)
+    # grid_score = stGrd['gridscore']
 
 
     #------
@@ -490,10 +500,10 @@ def run_wvf(train_episode_length,test_episode_length,episodes,gamma,lr,initial_t
     # plot_value_functions(epsilon_greedy_agent, env, "WVF Value Functions")
     # plot_raw_sr(epsilon_greedy_agent.M, env, "WVF SR Matrix")
 
-    return float(grid_score)
+    # return float(grid_score)
 
 # The Main experiment that compares the grid score from traditional SARSA against the new WVF Method
-def experiment_sarsa_wvf(train_episode_length,test_episode_length,episodes,gamma,lr,initial_train_epsilon,epsilon_decay,test_epsilon, num_runs):
+def experiment_sarsa_wvf(train_episode_length,test_episode_length,episodes,gamma,lr,initial_train_epsilon,epsilon_decay,test_epsilon, num_runs,test_episodes):
     
     # number of exepriments = goal slices size
     # The list that containt the number of goal sizes
@@ -502,13 +512,6 @@ def experiment_sarsa_wvf(train_episode_length,test_episode_length,episodes,gamma
     # Initialize empty lists to store results
     results = []
 
-    # # Run SARSA experiments
-    # for run in range(num_runs):
-    #     sarsa_grid_scores = run_sarsa(train_episode_length,test_episode_length,episodes,gamma,lr,initial_train_epsilon,epsilon_decay,test_epsilon, goal_size=goal_sizes[0])
-    #     sarsa_results.append(sarsa_grid_scores)
-    # run SARSA with decreasing goal sizes (no effect)
-
-
     # run SARSA and WVF with decreasing goal sizes and store results together
     for goal_size in goal_sizes:
         print("\nWVF Experiment for goal size:", goal_size)
@@ -516,10 +519,10 @@ def experiment_sarsa_wvf(train_episode_length,test_episode_length,episodes,gamma
 
         # Run the SARSA experiment num_runs times
         for _ in range(num_runs):
-            wvf_grid_score = run_wvf(train_episode_length, test_episode_length, episodes, gamma, lr, initial_train_epsilon, epsilon_decay, test_epsilon, goal_size)
+            wvf_grid_score = run_wvf(train_episode_length, test_episode_length, episodes, gamma, lr, initial_train_epsilon, epsilon_decay, test_epsilon, goal_size,test_episodes)
              # Check if the score is NaN, and set it to 0 if it is
             if math.isnan(wvf_grid_score):
-                wvf_grid_score = 0.0
+                wvf_grid_score = -2.0
 
             total_score += wvf_grid_score  # Accumulate the score
            
@@ -556,21 +559,22 @@ env.reset(agent_pos=[0, 0], goal_pos=[0, grid_size - 1])
 num_runs = 20
 
 # number of steps agent takes in envirnoment
-train_episode_length = 200
+train_episode_length = 400
 test_episode_length = 200
 
 # number of episodes per experiment
-episodes = 4000
+episodes = 15000
+test_episodes = 500
 
 # parameters for agent
 # gamma = 0.8
 gamma = 0.9
-lr = 1
+lr = 0.1
 # lr = 0.1 grid cells
 # lr = 1 gerauds
 # initial_train_epsilon = 0.6
 initial_train_epsilon = 1
-epsilon_decay = 0.995
+epsilon_decay = 0.9995
 test_epsilon = 0.01
 
-experiment_sarsa_wvf(train_episode_length,test_episode_length,episodes,gamma,lr,initial_train_epsilon,epsilon_decay,test_epsilon,num_runs)
+experiment_sarsa_wvf(train_episode_length,test_episode_length,episodes,gamma,lr,initial_train_epsilon,epsilon_decay,test_epsilon,num_runs,test_episodes)
