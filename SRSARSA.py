@@ -9,7 +9,8 @@ import matplotlib.animation as animation
 import random
 import pandas as pd
 # Calculating the grid score
-from metrics import GridScorer
+# from metrics import GridScorer
+from neuralplayground.comparison import GridScorer
 from scipy.ndimage import gaussian_filter
 
 # ------------------ Recording Functions --------------------------------
@@ -243,6 +244,13 @@ class SARSATabularSuccessorAgent(object):
         self.goal_size = goal_size
         self.goals = np.zeros((state_size, grid_size, grid_size), dtype=int)
         self.generate_goal_matrices()
+
+        #From NeuralPlayground (for grid score)
+        self.state_density = 2
+        self.room_width = grid_size
+        self.room_depth = grid_size
+        self.resolution_width = int(self.state_density * self.room_width)
+        self.resolution_depth = int(self.state_density * self.room_depth)
         
     def Q_estimates(self, state, goal=None):
         # Generate Q values for all actions.
@@ -305,6 +313,12 @@ class SARSATabularSuccessorAgent(object):
             td_error = (I + self.gamma * self.M[s_a_1, s_1, :] - self.M[s_a, s, :])
         self.M[s_a, s, :] += self.learning_rate * td_error
         return td_error
+    
+    # From neural playground: Stachenfeld2018 Agent
+    def get_rate_map_matrix(self, M, eigen_vector: int = 10,):
+        evals, evecs = np.linalg.eig(M)
+        r_out_im = evecs[:, eigen_vector].reshape((self.resolution_width, self.resolution_depth)).real
+        return r_out_im
 
 # --------------------Supporting Functions---------
 
@@ -432,13 +446,55 @@ def run_sarsa(train_episode_length,test_episode_length,episodes,gamma,lr,initial
             if env.done:
                 break
 
-    # Calculate grid score based on test experiences
-    test_rate_map = calculate_rate_map(SARSA_test_experiences, env)
-    grid_scorer = GridScorer(grid_size)
-    _, stGrd = grid_scorer.get_scores(test_rate_map)
-    grid_score = stGrd['gridscore']
+    # Eigen Vector 10
+    r_out_im=SARSAagent.get_rate_map_matrix(SARSAagent.M, eigen_vector=10)
 
-    return float(grid_score)
+    GridScorer_SARSAagent = GridScorer(SARSAagent.resolution_width)
+    GridScorer_SARSAagent.plot_grid_score(r_out_im=r_out_im, plot= True)
+    score = GridScorer_SARSAagent.get_scores(r_out_im)
+    grid_score_10 = score[1]['gridscore']
+
+    # Eigen Vector 20
+    r_out_im=SARSAagent.get_rate_map_matrix(SARSAagent.M, eigen_vector=20)
+
+    GridScorer_SARSAagent = GridScorer(SARSAagent.resolution_width)
+    GridScorer_SARSAagent.plot_grid_score(r_out_im=r_out_im, plot= True)
+    score = GridScorer_SARSAagent.get_scores(r_out_im)
+    grid_score_20 = score[1]['gridscore']
+
+    # Eigen Vector 30
+    r_out_im=SARSAagent.get_rate_map_matrix(SARSAagent.M, eigen_vector=30)
+
+    GridScorer_SARSAagent = GridScorer(SARSAagent.resolution_width)
+    GridScorer_SARSAagent.plot_grid_score(r_out_im=r_out_im, plot= True)
+    score = GridScorer_SARSAagent.get_scores(r_out_im)
+    grid_score_30 = score[1]['gridscore']
+
+    # Eigen Vector 40
+    r_out_im=SARSAagent.get_rate_map_matrix(SARSAagent.M, eigen_vector=40)
+
+    GridScorer_SARSAagent = GridScorer(SARSAagent.resolution_width)
+    GridScorer_SARSAagent.plot_grid_score(r_out_im=r_out_im, plot= True)
+    score = GridScorer_SARSAagent.get_scores(r_out_im)
+    grid_score_40 = score[1]['gridscore']
+
+    # Eigen Vector 50
+    r_out_im=SARSAagent.get_rate_map_matrix(SARSAagent.M, eigen_vector=50)
+
+    GridScorer_SARSAagent = GridScorer(SARSAagent.resolution_width)
+    GridScorer_SARSAagent.plot_grid_score(r_out_im=r_out_im, plot= True)
+    score = GridScorer_SARSAagent.get_scores(r_out_im)
+    grid_score_50 = score[1]['gridscore']
+
+    return [grid_score_10,grid_score_20,grid_score_30,grid_score_40,grid_score_50]
+
+    # Calculate grid score based on test experiences
+    # test_rate_map = calculate_rate_map(SARSA_test_experiences, env)
+    # grid_scorer = GridScorer(grid_size)
+    # _, stGrd = grid_scorer.get_scores(test_rate_map)
+    # grid_score = stGrd['gridscore']
+
+    # return float(score)
 
     # nbins = grid_size 
     # SARSA_rate_map = calculate_rate_map(SARSA_experiences, env) 
@@ -484,7 +540,8 @@ def experiment_sarsa(train_episode_length,test_episode_length,episodes,gamma,lr,
     
     # number of exepriments = goal slices size
     # The list that containt the number of goal sizes
-    goal_sizes = [8, 16, 24, 32 , 40, 48, 54, 62]   # Example goal sizes (can be changed) 1, 10, 20, 30 , 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100
+    # 8, 16, 24, 32 , 40, 48, 54, 62
+    goal_sizes = [4, 14, 24, 44, 64]   # Example goal sizes (can be changed) 1, 10, 20, 30 , 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100
 
     # Initialize empty lists to store results
     results = []
@@ -493,24 +550,22 @@ def experiment_sarsa(train_episode_length,test_episode_length,episodes,gamma,lr,
     for goal_size in goal_sizes:
         print("\nSARSA Experiment for goal size:", goal_size)
         
-        total_score = 0.0  # Initialize a score accumulator
+        total_scores = [0.0] * 5  # testing for 5 different eigen vectore
 
         # Run the SARSA experiment num_runs times
         for _ in range(num_runs):
-            sarsa_grid_score = run_sarsa(train_episode_length, test_episode_length, episodes, gamma, lr, initial_train_epsilon, epsilon_decay, test_epsilon, goal_size,test_episodes)
+            sarsa_grid_scores = run_sarsa(train_episode_length, test_episode_length, episodes, gamma, lr, initial_train_epsilon, epsilon_decay, test_epsilon, goal_size,test_episodes)
             # Check if the score is NaN, and set it to 0 if it is
-            if math.isnan(sarsa_grid_score):
-                sarsa_grid_score = -2.0
+            # Replace NaN values with -2.0
+            current_grid_scores = np.where(np.isnan(sarsa_grid_scores), -2.0, sarsa_grid_scores)
 
-            total_score += sarsa_grid_score  # Accumulate the score
-            
-            print("Grid score:", sarsa_grid_score)
+            total_scores += current_grid_scores  # Accumulate the score
 
         # Calculate the average score for the current goal size
-        average_score = total_score / num_runs
+        average_scores = total_scores / num_runs
         
-        # Append only the goal size and average SARSA score to the results
-        results.append([goal_size, average_score])
+        # Append only the goal size and average SARSA score to the results. return the max eigenvector value as its most grid-like
+        results.append([goal_size, max(average_scores)])
 
     # Store the results in a DataFrame
     combined_df = pd.DataFrame(results, columns=['Goal Size', 'Average SARSA Grid Score'])
@@ -537,12 +592,12 @@ env.reset(agent_pos=[0, 0], goal_pos=[0, grid_size - 1])
 num_runs = 10
 
 # number of steps agent takes in envirnoment
-train_episode_length = 300
-test_episode_length = 150
+train_episode_length = 400
+test_episode_length = 200
 
 # number of episodes per experiment
 episodes = 5000
-test_episodes = 250
+test_episodes = 500
 
 # parameters for agent
 # gamma = 0.8
