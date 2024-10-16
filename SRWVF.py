@@ -469,47 +469,17 @@ def run_wvf(train_episode_length,test_episode_length,episodes,gamma,lr,initial_t
             if env.done:
                 break
 
-        # Eigen Vector 10
-    r_out_im=epsilon_greedy_agent.get_rate_map_matrix(epsilon_greedy_agent.M, eigen_vector=10)
+    grid_scores = []
+    for eigen_vector in [10, 20, 30, 40, 50]:
+        r_out_im = epsilon_greedy_agent.get_rate_map_matrix(epsilon_greedy_agent.M, eigen_vector=eigen_vector)
+        GridScorer_SARSAagent = GridScorer(epsilon_greedy_agent.resolution_width)
+        score = GridScorer_SARSAagent.get_scores(r_out_im)
+        grid_scores.append(score[1]['gridscore'])
 
-    GridScorer_epsilon_greedy_agent = GridScorer(epsilon_greedy_agent.resolution_width)
-    GridScorer_epsilon_greedy_agent.plot_grid_score(r_out_im=r_out_im, plot= True)
-    score = GridScorer_epsilon_greedy_agent.get_scores(r_out_im)
-    grid_score_10 = score[1]['gridscore']
+        if eigen_vector == 50:
+            plot_grid_cells(epsilon_greedy_agent, env, "WVF Eigen Vector 50", num_grid_cells=16)
 
-    # Eigen Vector 20
-    r_out_im=epsilon_greedy_agent.get_rate_map_matrix(epsilon_greedy_agent.M, eigen_vector=20)
-
-    GridScorer_epsilon_greedy_agent = GridScorer(epsilon_greedy_agent.resolution_width)
-    GridScorer_epsilon_greedy_agent.plot_grid_score(r_out_im=r_out_im, plot= True)
-    score = GridScorer_epsilon_greedy_agent.get_scores(r_out_im)
-    grid_score_20 = score[1]['gridscore']
-
-    # Eigen Vector 30
-    r_out_im=epsilon_greedy_agent.get_rate_map_matrix(epsilon_greedy_agent.M, eigen_vector=30)
-
-    GridScorer_epsilon_greedy_agent = GridScorer(epsilon_greedy_agent.resolution_width)
-    GridScorer_epsilon_greedy_agent.plot_grid_score(r_out_im=r_out_im, plot= True)
-    score = GridScorer_epsilon_greedy_agent.get_scores(r_out_im)
-    grid_score_30 = score[1]['gridscore']
-
-    # Eigen Vector 40
-    r_out_im=epsilon_greedy_agent.get_rate_map_matrix(epsilon_greedy_agent.M, eigen_vector=40)
-
-    GridScorer_epsilon_greedy_agent = GridScorer(epsilon_greedy_agent.resolution_width)
-    GridScorer_epsilon_greedy_agent.plot_grid_score(r_out_im=r_out_im, plot= True)
-    score = GridScorer_epsilon_greedy_agent.get_scores(r_out_im)
-    grid_score_40 = score[1]['gridscore']
-
-    # Eigen Vector 50
-    r_out_im=epsilon_greedy_agent.get_rate_map_matrix(epsilon_greedy_agent.M, eigen_vector=50)
-
-    GridScorer_epsilon_greedy_agent = GridScorer(epsilon_greedy_agent.resolution_width)
-    GridScorer_epsilon_greedy_agent.plot_grid_score(r_out_im=r_out_im, plot= True)
-    score = GridScorer_epsilon_greedy_agent.get_scores(r_out_im)
-    grid_score_50 = score[1]['gridscore']
-
-    return [grid_score_10,grid_score_20,grid_score_30,grid_score_40,grid_score_50]
+    return grid_scores
 
     # Calculate grid score based on test experiences
     # test_rate_map = calculate_rate_map(test_experiences, env)
@@ -563,7 +533,7 @@ def experiment_sarsa_wvf(train_episode_length,test_episode_length,episodes,gamma
     # number of exepriments = goal slices size
     # The list that containt the number of goal sizes
     # [4, 14, 24, 44, 64]
-    goal_sizes = [4, 14, 24, 44, 64]  # Example goal sizes (can be changed) 1, 10, 20, 30 , 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100
+    goal_sizes = [25, 75, 125, 175, 225]  # Example goal sizes (can be changed) 1, 10, 20, 30 , 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100
 
     # Initialize empty lists to store results
     results = []
@@ -577,7 +547,7 @@ def experiment_sarsa_wvf(train_episode_length,test_episode_length,episodes,gamma
         for _ in range(num_runs):
             wvf_grid_scores = run_wvf(train_episode_length, test_episode_length, episodes, gamma, lr, initial_train_epsilon, epsilon_decay, test_epsilon, goal_size,test_episodes)
             # Check if the score is NaN, and set it to -2 if it is
-            current_grid_scores = np.where(np.isnan(wvf_grid_scores), -2.0, wvf_grid_scores)
+            current_grid_scores = np.where(np.isnan(wvf_grid_scores), 0.0, wvf_grid_scores)
 
             total_scores += current_grid_scores  # Accumulate the score
            
@@ -602,7 +572,7 @@ def experiment_sarsa_wvf(train_episode_length,test_episode_length,episodes,gamma
 cmap = plt.cm.viridis
 cmap.set_bad(color='white')
 
-grid_size = 8
+grid_size = 15
 
 pattern = "empty"
 env = SimpleGrid(grid_size, block_pattern=pattern, obs_mode="index")
@@ -611,15 +581,15 @@ env.reset(agent_pos=[0, 0], goal_pos=[0, grid_size - 1])
 # --------------------Training and Testing Parameters for Q-learning agents and SARSA agents --------------------------------
 # parameters for training
 
-num_runs = 15
+num_runs = 20
 
 # number of steps agent takes in envirnoment
-train_episode_length = 400
-test_episode_length = 200
+train_episode_length = 500
+test_episode_length = 300
 
 # number of episodes per experiment
-episodes = 5000
-test_episodes = 1000
+episodes = 7000
+test_episodes = 1500
 
 # parameters for agent
 # gamma = 0.8

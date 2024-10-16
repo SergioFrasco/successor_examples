@@ -107,6 +107,39 @@ def plot_grid_cells(agent, env, title, num_grid_cells=16):
     # Close the plot to free up memory
     plt.close()
 
+def plot_single_grid_cell(agent, env, title, num_grid_cell=16):
+    # Reshape the SR matrix to be state_size x state_size for eigen decomposition
+    sr_matrix = np.mean(agent.M, axis=0)  # Averaging over actions
+    
+    # Perform eigen decomposition
+    eigenvalues, eigenvectors = np.linalg.eigh(sr_matrix)
+    
+    # Sort the eigenvectors by the corresponding eigenvalues in descending order
+    idx = np.argsort(-eigenvalues)
+    eigenvectors = eigenvectors[:, idx]
+    
+    # Calculate the grid layout
+    grid_size = math.ceil(math.sqrt(num_grid_cell))
+    
+    # Plot the specified number of principal eigenvectors (grid cells)
+    plt.figure(figsize=(4 * grid_size, 4 * grid_size))
+    
+
+    plt.subplot(grid_size, grid_size, num_grid_cell + 1)
+    grid_cell = np.reshape(eigenvectors[:, num_grid_cell], (env.grid_size, env.grid_size))
+    plt.imshow(grid_cell, cmap='viridis')
+    plt.title(f'Eigenvector {num_grid_cell + 1}')
+    plt.colorbar()
+
+    plt.suptitle(title)
+    plt.tight_layout()
+    
+    if not os.path.exists('plots'):
+        os.makedirs('plots')
+
+    plt.savefig(f'plots/{title}.png')
+    plt.close()
+
 def plot_value_functions(agent, env, title, trained_goals=None):
     grid_size = env.grid_size
     state_size = env.state_size
@@ -446,47 +479,18 @@ def run_sarsa(train_episode_length,test_episode_length,episodes,gamma,lr,initial
             if env.done:
                 break
 
-    # Eigen Vector 10
-    r_out_im=SARSAagent.get_rate_map_matrix(SARSAagent.M, eigen_vector=10)
+    grid_scores = []
+    for eigen_vector in [10, 20, 30, 40, 50]:
+        r_out_im = SARSAagent.get_rate_map_matrix(SARSAagent.M, eigen_vector=eigen_vector)
+        GridScorer_SARSAagent = GridScorer(SARSAagent.resolution_width)
+        score = GridScorer_SARSAagent.get_scores(r_out_im)
+        grid_scores.append(score[1]['gridscore'])
 
-    GridScorer_SARSAagent = GridScorer(SARSAagent.resolution_width)
-    GridScorer_SARSAagent.plot_grid_score(r_out_im=r_out_im, plot= True)
-    score = GridScorer_SARSAagent.get_scores(r_out_im)
-    grid_score_10 = score[1]['gridscore']
+        if eigen_vector == 50:
+            plot_grid_cells(SARSAagent, env, "SARSA Eigen Vector 50", num_grid_cells=16)
 
-    # Eigen Vector 20
-    r_out_im=SARSAagent.get_rate_map_matrix(SARSAagent.M, eigen_vector=20)
+    return grid_scores
 
-    GridScorer_SARSAagent = GridScorer(SARSAagent.resolution_width)
-    GridScorer_SARSAagent.plot_grid_score(r_out_im=r_out_im, plot= True)
-    score = GridScorer_SARSAagent.get_scores(r_out_im)
-    grid_score_20 = score[1]['gridscore']
-
-    # Eigen Vector 30
-    r_out_im=SARSAagent.get_rate_map_matrix(SARSAagent.M, eigen_vector=30)
-
-    GridScorer_SARSAagent = GridScorer(SARSAagent.resolution_width)
-    GridScorer_SARSAagent.plot_grid_score(r_out_im=r_out_im, plot= True)
-    score = GridScorer_SARSAagent.get_scores(r_out_im)
-    grid_score_30 = score[1]['gridscore']
-
-    # Eigen Vector 40
-    r_out_im=SARSAagent.get_rate_map_matrix(SARSAagent.M, eigen_vector=40)
-
-    GridScorer_SARSAagent = GridScorer(SARSAagent.resolution_width)
-    GridScorer_SARSAagent.plot_grid_score(r_out_im=r_out_im, plot= True)
-    score = GridScorer_SARSAagent.get_scores(r_out_im)
-    grid_score_40 = score[1]['gridscore']
-
-    # Eigen Vector 50
-    r_out_im=SARSAagent.get_rate_map_matrix(SARSAagent.M, eigen_vector=50)
-
-    GridScorer_SARSAagent = GridScorer(SARSAagent.resolution_width)
-    GridScorer_SARSAagent.plot_grid_score(r_out_im=r_out_im, plot= True)
-    score = GridScorer_SARSAagent.get_scores(r_out_im)
-    grid_score_50 = score[1]['gridscore']
-
-    return [grid_score_10,grid_score_20,grid_score_30,grid_score_40,grid_score_50]
 
     # Calculate grid score based on test experiences
     # test_rate_map = calculate_rate_map(SARSA_test_experiences, env)
@@ -541,7 +545,7 @@ def experiment_sarsa(train_episode_length,test_episode_length,episodes,gamma,lr,
     # number of exepriments = goal slices size
     # The list that containt the number of goal sizes
     # 8, 16, 24, 32 , 40, 48, 54, 62
-    goal_sizes = [4, 14, 24, 44, 64]   # Example goal sizes (can be changed) 1, 10, 20, 30 , 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100
+    goal_sizes = [25, 75, 125, 175, 225]   # Example goal sizes (can be changed) 1, 10, 20, 30 , 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100
 
     # Initialize empty lists to store results
     results = []
@@ -557,7 +561,7 @@ def experiment_sarsa(train_episode_length,test_episode_length,episodes,gamma,lr,
             sarsa_grid_scores = run_sarsa(train_episode_length, test_episode_length, episodes, gamma, lr, initial_train_epsilon, epsilon_decay, test_epsilon, goal_size,test_episodes)
             # Check if the score is NaN, and set it to 0 if it is
             # Replace NaN values with -2.0
-            current_grid_scores = np.where(np.isnan(sarsa_grid_scores), -2.0, sarsa_grid_scores)
+            current_grid_scores = np.where(np.isnan(sarsa_grid_scores), 0.0, sarsa_grid_scores)
 
             total_scores += current_grid_scores  # Accumulate the score
 
@@ -580,7 +584,7 @@ def experiment_sarsa(train_episode_length,test_episode_length,episodes,gamma,lr,
 cmap = plt.cm.viridis
 cmap.set_bad(color='white')
 
-grid_size = 8
+grid_size = 15
 
 pattern = "empty"
 env = SimpleGrid(grid_size, block_pattern=pattern, obs_mode="index")
@@ -589,15 +593,15 @@ env.reset(agent_pos=[0, 0], goal_pos=[0, grid_size - 1])
 
 # --------------------Training and Testing Parameters for Q-learning agents and SARSA agents --------------------------------
 # parameters for training
-num_runs = 15
+num_runs = 20
 
 # number of steps agent takes in envirnoment
-train_episode_length = 400
-test_episode_length = 200
+train_episode_length = 500
+test_episode_length = 300
 
 # number of episodes per experiment
-episodes = 5000
-test_episodes = 1000
+episodes = 7000
+test_episodes = 1500
 
 # parameters for agent
 # gamma = 0.8
