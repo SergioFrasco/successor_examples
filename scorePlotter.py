@@ -11,9 +11,12 @@ wvf_scores = data['WVF Grid Score']
 plt.figure(figsize=(10, 6))
 plt.plot(goal_size, sarsa_scores, label='SARSA Grid Score', marker='o')
 plt.plot(goal_size, wvf_scores, label='WVF Grid Score', marker='s')
-plt.title('Comparison of SARSA and WVF Grid Scores vs Goal Size')
-plt.xlabel('Goal Size')
-plt.ylabel('Grid Score')
-plt.legend()
+
+# Adjust the font sizes
+plt.title('Comparison of SARSA and WVF Grid Scores vs Goal Size', fontsize=20)
+plt.xlabel('Goal Size', fontsize=18)
+plt.ylabel('Grid Score', fontsize=18)
+plt.legend(fontsize=18)
+
 plt.grid(True)
 plt.savefig("Sarsa Vs. WVF Grid Score.png")
