@@ -599,7 +599,7 @@ env.reset(agent_pos=[0, 0], goal_pos=[0, grid_size - 1])
 
 # --------------------Training and Testing Parameters for Q-learning agents and SARSA agents --------------------------------
 # parameters for training
-num_runs = 20
+num_runs = 10
 
 # number of steps agent takes in envirnoment
 train_episode_length = 500
@@ -620,20 +620,6 @@ initial_train_epsilon = 1
 epsilon_decay = 0.9995
 test_epsilon = 0.01
 
-
-
-
-num_runs = 2
-
-# number of steps agent takes in envirnoment
-train_episode_length = 5
-test_episode_length = 3
-
-# number of episodes per experiment
-episodes = 7
-test_episodes = 15
-
-# parameters for agent
 
 experiment_sarsa(train_episode_length,test_episode_length,episodes,gamma,lr,initial_train_epsilon,epsilon_decay,test_epsilon,num_runs,test_episodes)
 
