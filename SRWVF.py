@@ -472,8 +472,14 @@ def run_wvf(train_episode_length,test_episode_length,episodes,gamma,lr,initial_t
     grid_scores = []
     for eigen_vector in [10, 20, 30, 40, 50]:
         r_out_im = epsilon_greedy_agent.get_rate_map_matrix(epsilon_greedy_agent.M, eigen_vector=eigen_vector)
-        GridScorer_SARSAagent = GridScorer(epsilon_greedy_agent.resolution_width)
-        score = GridScorer_SARSAagent.get_scores(r_out_im)
+
+         # Shift the values in r_out_im so that they are greater than 1
+        min_value = r_out_im.min()  # Find the minimum value in the rate map matrix
+        r_out_im += abs(min_value)   # Shift values by adding the absolute min  to make all values > 0
+
+
+        GridScorer_WVFagent = GridScorer(epsilon_greedy_agent.resolution_width)
+        score = GridScorer_WVFagent.get_scores(r_out_im)
         grid_scores.append(score[1]['gridscore'])
 
         if eigen_vector == 50:
@@ -581,15 +587,15 @@ env.reset(agent_pos=[0, 0], goal_pos=[0, grid_size - 1])
 # --------------------Training and Testing Parameters for Q-learning agents and SARSA agents --------------------------------
 # parameters for training
 
-num_runs = 20
+num_runs = 10
 
 # number of steps agent takes in envirnoment
 train_episode_length = 500
 test_episode_length = 300
 
 # number of episodes per experiment
-episodes = 7000
-test_episodes = 1500
+episodes = 5000
+test_episodes = 1000
 
 # parameters for agent
 # gamma = 0.8
@@ -601,5 +607,8 @@ lr = 0.1
 initial_train_epsilon = 1
 epsilon_decay = 0.9995
 test_epsilon = 0.01
+
+
+
 
 experiment_sarsa_wvf(train_episode_length,test_episode_length,episodes,gamma,lr,initial_train_epsilon,epsilon_decay,test_epsilon,num_runs,test_episodes)

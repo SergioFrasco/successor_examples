@@ -213,11 +213,11 @@ def plot_goal_matrices(goals, env):
         ax = plt.subplot(grid_size, grid_size, slice_index + 1)
         goal_matrix = goals[slice_index]
         ax.imshow(utils.mask_grid(goal_matrix, env.blocks), cmap='viridis')
-        ax.set_title(f'Slice: {slice_index}')
-        ax.axis('on')
+        # ax.set_title(f'Slice: {slice_index}')
+        # ax.axis('on')
 
     plt.tight_layout()
-    # plt.show()
+    plt.savefig("Goal Slices")
 
 
 # Use the experiences to show where the agent was the most
@@ -424,6 +424,7 @@ def run_sarsa(train_episode_length,test_episode_length,episodes,gamma,lr,initial
     SARSA_test_experiences = []
     SARSA_test_lengths = []
     SARSA_lifetime_td_errors = []
+    plot_goal_matrices(SARSAagent.goals, env)
 
     # For Grid score
     # SARSA_rate_map = np.zeros([env.grid_size, env.grid_size])
@@ -482,6 +483,11 @@ def run_sarsa(train_episode_length,test_episode_length,episodes,gamma,lr,initial
     grid_scores = []
     for eigen_vector in [10, 20, 30, 40, 50]:
         r_out_im = SARSAagent.get_rate_map_matrix(SARSAagent.M, eigen_vector=eigen_vector)
+
+         # Shift the values in r_out_im so that they are greater than 1
+        min_value = r_out_im.min()  # Find the minimum value in the rate map matrix
+        r_out_im += abs(min_value)   # Shift values by adding the absolute min  to make all values > 0
+
         GridScorer_SARSAagent = GridScorer(SARSAagent.resolution_width)
         score = GridScorer_SARSAagent.get_scores(r_out_im)
         grid_scores.append(score[1]['gridscore'])
@@ -545,7 +551,7 @@ def experiment_sarsa(train_episode_length,test_episode_length,episodes,gamma,lr,
     # number of exepriments = goal slices size
     # The list that containt the number of goal sizes
     # 8, 16, 24, 32 , 40, 48, 54, 62
-    goal_sizes = [25, 75, 125, 175, 225]   # Example goal sizes (can be changed) 1, 10, 20, 30 , 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100
+    goal_sizes = [25, 75, 125, 175, 225]   # goal sizes (can be changed) 1, 10, 20, 30 , 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100
 
     # Initialize empty lists to store results
     results = []
@@ -600,8 +606,8 @@ train_episode_length = 500
 test_episode_length = 300
 
 # number of episodes per experiment
-episodes = 7000
-test_episodes = 1500
+episodes = 5000
+test_episodes = 1000
 
 # parameters for agent
 # gamma = 0.8
@@ -613,6 +619,21 @@ lr = 0.1
 initial_train_epsilon = 1
 epsilon_decay = 0.9995
 test_epsilon = 0.01
+
+
+
+
+num_runs = 2
+
+# number of steps agent takes in envirnoment
+train_episode_length = 5
+test_episode_length = 3
+
+# number of episodes per experiment
+episodes = 7
+test_episodes = 15
+
+# parameters for agent
 
 experiment_sarsa(train_episode_length,test_episode_length,episodes,gamma,lr,initial_train_epsilon,epsilon_decay,test_epsilon,num_runs,test_episodes)
 
