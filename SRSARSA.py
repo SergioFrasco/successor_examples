@@ -321,6 +321,23 @@ class SARSATabularSuccessorAgent(object):
             x, y = available_positions[slice_index]
             self.goals[slice_index, x, y] = 1
             # print(f"Slice {slice_index}: Position ({x}, {y}) set as goal")
+
+    # def generate_goal_matrices(self):
+    #     # Initialize the goal matrix with zeros
+    #     self.goals = np.zeros((self.goal_size, grid_size, grid_size), dtype=int)
+        
+    #     # Get all available positions (excluding blocks) in row-major order
+    #     available_positions = [(x, y) for x in range(grid_size) for y in range(grid_size) if (x, y) not in env.blocks]
+        
+    #     # Check if we have enough available positions to place the goals
+    #     if self.goal_size > len(available_positions):
+    #         raise ValueError("Not enough available positions to place all goals.")
+        
+    #     # Assign a unique position to each slice in order
+    #     for slice_index in range(self.goal_size):
+    #         x, y = available_positions[slice_index]
+    #         self.goals[slice_index, x, y] = 1
+    #         # print(f"Slice {slice_index}: Position ({x}, {y}) set as goal")
         
     
     def update_w(self, current_exp):
