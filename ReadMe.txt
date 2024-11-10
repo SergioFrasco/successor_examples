@@ -38,3 +38,6 @@ so they are severaly under-trained. The final plots can be found under my profil
 Requirements:
 - Python 3+
 - Necessary packages: NumPy, Matplotlib, and Pandas, NeuralPlayground.
+
+Footnote:
+Portions of the work presented here have been submitted to Cosyne as an extended abstract
